@@ -1,1 +1,1 @@
-# diplom
+# diplomchik
