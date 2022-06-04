@@ -8,11 +8,11 @@ import numpy as np
 from FractalAnalysisClass import FractalAnalysis
 
 
-def noice(img, lower, upper, plot=False):
+def noice(img_orig, lower, upper, plot=False):
     """
     Функция избавляется от шумов на изображении (чёрные или белые пятна)
 
-    :param img: 3-D numpy массив.
+    :param img_orig: 3-D numpy массив.
         Изображение в цветовом пространстве BGR.
     :param lower: int
         Нижний предел допустимой (не шумовой) интенсивности цвета.
@@ -26,9 +26,9 @@ def noice(img, lower, upper, plot=False):
         Обработанное изображение в цветовом пространстве BGR.
     """
     # перевод изображения в пространство оттенков серого
-    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    gray = cv.cvtColor(img_orig, cv.COLOR_BGR2GRAY)
 
-    # пороговая бинаризация изображение
+    # Пороговая бинаризация изображение
     # пиксели, интенсивность которых не входит в диапазон [lower, upper], становятся чёрными. Остальные - белыми
     mask1 = cv.threshold(gray, lower, 255, cv.THRESH_BINARY_INV)[1]
     mask2 = cv.threshold(gray, upper, 255, cv.THRESH_BINARY)[1]
@@ -46,15 +46,15 @@ def noice(img, lower, upper, plot=False):
     mask_inv = 255 - mask
 
     # Считаем радиус для размытия областей с шумом
-    radius = int(img.shape[0] / 3) + 1
+    radius = int(img_orig.shape[0] / 3) + 1
     if radius % 2 == 0:
         radius = radius + 1
 
     # Размываем изображение
-    median = cv.medianBlur(img, radius)
+    median = cv.medianBlur(img_orig, radius)
 
     # Накладываем маску на изображение
-    img_masked = cv.bitwise_and(img, mask)
+    img_masked = cv.bitwise_and(img_orig, mask)
 
     # Накладываем инвертированную маску на размытое изображение
     median_masked = cv.bitwise_and(median, mask_inv)
@@ -103,6 +103,7 @@ def noice(img, lower, upper, plot=False):
 
     return result
 
+
 def field_to_image(input_field, show=False):
     """
     Перевод поля фрактальных размерностей в пространство оттенков серого
@@ -128,6 +129,7 @@ def field_to_image(input_field, show=False):
         plt.show()
     return img_out
 
+
 # вспомогательные флаги-переменные
 flag_convert = False
 flag_filter = False
@@ -143,7 +145,6 @@ try:
     # если изображение не формата .jpeg, необходимо его конвертировать
     if file_extension != '.jpg' and file_extension != '.JPG' \
             and file_extension != '.jpeg' and file_extension != '.JPEG':
-        
         # читаем файл
         imgForConvert = cv.imread(image_name)
         # временное сохранение изображения в формате .jpeg в рабочей папке
@@ -151,7 +152,7 @@ try:
         image_name = 'modified_img.jpg'
         del imgForConvert
         flag_png = True
-    
+
     # чтение изображение
     imgorig = cv.imread(image_name)
 except Exception as e:
@@ -171,21 +172,21 @@ if tfi == 1:
     # по которой можно определить пороговые значения интенсивности
     plt.hist(imgorig.ravel(), 256, [0, 256])
     plt.show()
-    
+
     # значения по умолчанию
     up = 170
     low = 30
-    
+
     print('Default parameters for noice (upper=170, lower=30)? 1 - Yes, 0 - No')
     if int(input()) == 0:
         print('Enter upper limit - ', end='')
         up = int(input())
         print('Enter lower limit - ', end='')
         low = int(input())
-        
+
     # обработка изображения (удаление шумов)
     img = noice(imgorig, lower=low, upper=up, plot=True)
-    
+
     # перевод изображения в пространство оттенков серого
     img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     flag_filter = True
@@ -2034,9 +2035,8 @@ def EMwithAdding():
 
 
         plt.show()"""
-=======
+
 '''
 >>>>>>> 4e9401b4c0aba1445f05a0b4f173a62ade31b2c9
 =======
 '''
->>>>>>> 4e9401b4c0aba1445f05a0b4f173a62ade31b2c9
