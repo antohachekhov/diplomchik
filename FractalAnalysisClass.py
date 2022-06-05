@@ -179,7 +179,7 @@ class FractalAnalysis:
         Метод основан на подсчёте количества кубов, необходимых для полного покрытия поверхности на разных масштабах
 
         """
-        self.field = np.zeros(self._windows.shape[0], self._windows.shape[1])
+        self.field = np.zeros((self._windows.shape[0], self._windows.shape[1]))
 
         # проход по каждому измерительному окну
         for i in range(self._windows.shape[0]):
@@ -744,9 +744,6 @@ class FractalAnalysis:
         # выделение и бинаризация областей с заданной интенсивностью цвета
         value_img = cv.inRange(img, intensity, intensity + 1)
 
-        plt.imshow(value_img)
-        plt.show()
-
         # "открытие" изображения (удаление мелких объектов) с эллиптическим ядром 7х7
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (7, 7))
         morph_open = cv.morphologyEx(value_img, cv.MORPH_OPEN, kernel)
@@ -756,8 +753,13 @@ class FractalAnalysis:
         morph_close = cv.morphologyEx(morph_open, cv.MORPH_CLOSE, kernel)
 
         # размытие по Гауссу границ объектов с радиусом - размер измерительного окна
-        radius = self._win_size if self._win_size % 2 == 1 else self._win_size - 1
-        blur = cv.GaussianBlur(morph_close, (radius, radius), 0)
+        # radius = self._win_size if self._win_size % 2 == 1 else self._win_size - 1
+        radius = int(self._win_size / 2 if self._win_size / 2 % 2 == 1 else self._win_size / 2 - 1)
+
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (radius, radius))
+        blur = cv.dilate(morph_close, kernel)
+
+        # blur = cv.GaussianBlur(morph_close, (radius, radius), 0)
         _, thresh = cv.threshold(blur, 30, 255, cv.THRESH_BINARY)
 
         # выделение объектов на изображении и составление статистики
@@ -878,12 +880,13 @@ class FractalAnalysis:
         # перевод результата в пространство RGB
         result = cv.cvtColor(result, cv.COLOR_BGR2RGB)
 
+        plt.figure(figsize=(13, 7))
         plt.imshow(result)
         purple_square = lns.Line2D([], [], color=(0.4, 0, 0.6), marker='s', linestyle='None',
                                    markersize=7, label='Переходный слой')
         plt.legend(handles=[purple_square])
         if self._save_result:
-            plt.savefig(folder + '/' + strftime("%d-%m-%Y %H-%M-%S") + '.png', dpi=300)
+            plt.savefig(folder + '/' + strftime("%d-%m-%Y %H-%M-%S") + '.png', dpi=100)
         plt.show()
 
     def segment_stratum(self,
