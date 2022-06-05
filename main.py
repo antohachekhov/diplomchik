@@ -247,7 +247,7 @@ else:
     dy = int(input())
 
     # создание поля
-    fractal.set_field(img, win_size, dx, dy, method='prism')
+    fractal.set_field(img, win_size, dx, dy, method='cubes')
     # визуализация полученного поля
     field_to_image(fractal.field, show=True)
 
