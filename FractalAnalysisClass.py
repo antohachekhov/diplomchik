@@ -1,4 +1,7 @@
-from time import strftime
+import cv2 as cv
+import numpy as np
+import matplotlib.pyplot as plt
+
 from kneed import KneeLocator
 from math import ceil, log, sqrt
 from scipy.signal import medfilt
@@ -6,12 +9,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
 from statsmodels.nonparametric.api import lowess
-
-import os
-import cv2 as cv
-import numpy as np
-import matplotlib.lines as lns
-import matplotlib.pyplot as plt
 
 
 class FractalAnalysis:
@@ -30,9 +27,6 @@ class FractalAnalysis:
     _dy : int, по умолчанию = 1
         Шаг измерительного окна по оси y
 
-    _save_result : bool, по умолчанию = True.
-        True, если требуется сохранять результаты в файловой системе
-
     _show_step : bool, по умолчанию = False
         True, если необходимо отображать промежуточные результаты сегментации
 
@@ -44,7 +38,7 @@ class FractalAnalysis:
         Если параметр равен -1, он будет автоматически вычислен перед DBSCAN-кластеризацией
 
     _min_transition : float, по умолчанию = 0.4
-        Величина изменения фрактальной размерности на границе двух текстур
+        Минимальная величина изменения фрактальной размерности на границе двух текстур - переходное изменение
 
     _median_kernel : int, по умолчанию = 21
         Ширина медианного фильтра. Должна быть нечётной!
@@ -64,9 +58,12 @@ class FractalAnalysis:
     field : 2-D numpy массив, по умолчанию = None
         Поле фрактальных размерностей
 
+    _segments : 2-D numpy массив, по умолчанию = None
+        Бинарное изображение, содержащее найденные сегменты текстур
+
     """
 
-    def __init__(self, save_result=True, show_step=False):
+    def __init__(self, show_step=False):
         """
         Инициализатор объекта класса
 
@@ -74,7 +71,6 @@ class FractalAnalysis:
         self._win_size = 30
         self._dx = 1
         self._dy = 1
-        self._save_result = save_result
         self._show_step = show_step
         self._min_samples = 8
         self._distance = -1
@@ -84,6 +80,7 @@ class FractalAnalysis:
         self._windows = None
         self._sub_windows_sizes = None
         self._img = None
+        self._segments = None
         self.field = None
 
     def _check_image(self, img):
@@ -124,8 +121,8 @@ class FractalAnalysis:
 
         if field is not None:
             # размер поля должен соответсвовать размеру изображения
-            if field.shape != ((self._img.shape[0] - win_size) / dy + 1,
-                               (self._img.shape[1] - win_size) / dx + 1):
+            if field.shape != (int((self._img.shape[0] - win_size) / dy + 1),
+                               int((self._img.shape[1] - win_size) / dx + 1)):
                 raise ValueError('The size of the field does not correspond to the size of the image and'
                                  ' the selected window parameters')
 
@@ -157,6 +154,99 @@ class FractalAnalysis:
                 dy = 1
                 print('dy has been increased to the minimum allowed (1)')
         return win_size, dx, dy
+
+    def _check_n_comp(self, n_comp):
+        """
+        Проверка числа компонент в смеси распределений, введенного пользователем
+
+        :param n_comp : int
+            Число компонент в смеси распределений
+
+        :return: n_comp : int
+            Обработанное число компонент в смеси
+
+        """
+        try:
+            # число компонент может быть только 2 или 3
+            if n_comp != 2 and n_comp != 3:
+                raise ValueError('n_comp can be 2 or 3 only')
+        except ValueError:
+            # если введено число меньше 2, оно увеличивается его до 2
+            if n_comp < 2:
+                n_comp = 2
+                print('n_comp has been changed to 2')
+            # если больше 3, то оно уменьшается его до 3
+            elif n_comp > 3:
+                print('n_comp has been changed to 3')
+                n_comp = 3
+            # если в диапозоне (2, 3), оно округляется до ближайшего целого
+            elif 2 < n_comp < 3:
+                n_comp = round(n_comp)
+                print('n_comp has been changed to ', str(n_comp))
+        return n_comp
+
+    def _check_median_kernel(self, median_kernel):
+        """
+        Проверка заданной пользователем ширины медианного фильтра
+
+        :param median_kernel: int
+            Ширина медианного фильтра, введённая пользователем
+
+        :return: median_kernel: int
+            Обработанная ширина медианного фильтра
+
+        """
+        # ширина медианного фильтра не может быть меньше 1
+        if median_kernel < 1:
+            raise ValueError('median_kernel cannot be non-positive')
+        try:
+            # ширина медианного фильтра должна быть нечётной
+            if (median_kernel % 2) == 0:
+                raise ValueError('median_kernel cannot be even')
+        except ValueError:
+            # если введенно чётное число, оно уменьшается или увеличивается до нечётного
+            if median_kernel + 1 < min(self._img.shape):
+                median_kernel += 1
+            elif median_kernel - 1 > 0:
+                median_kernel -= 1
+            else:
+                raise ValueError('Invalid value of median_kernel')
+        return median_kernel
+
+    def _check_0_1(self, value):
+        """
+        Проверка нахождения значения переменной в диапозоне [0, 1]
+
+        :param value : float
+            Переменная, введённая пользователем
+
+        """
+        if value < 0 or value > 1:
+            raise ValueError('Value can be in range [0, 1] only')
+
+    def _check_positive(self, value):
+        """
+        Проверка положительности значения переменной, введённой пользователем
+
+        :param value : float
+            Переменная, введённая пользователем
+
+        """
+        # значение не должно быть меньше или равно 0
+        if value <= 0:
+            raise ValueError('Value can be positive only')
+
+    def _check_int(self, value):
+        """
+        Проверка значения переменной на целое число
+
+        :param value: int
+            Переменная, введённая пользователем
+
+        """
+        # для целого значения результаты приведения к типам int и float должны быть одинаковыми
+        if int(value) != float(value):
+            raise TypeError('Value can be integer only')
 
     def _generate_windows(self):
         """
@@ -300,8 +390,8 @@ class FractalAnalysis:
                             b = int(cut[0][sx - 1])
                             c = int(cut[sy - 1][0])
                             d = int(cut[sy - 1][sx - 1])
-                            e = int(cut[int((sy - 1) / 2)][int((sx - 1) / 2)])
-                            # e = (a + b + c + d) / 4
+                            # e = int(cut[int((sy - 1) / 2)][int((sx - 1) / 2)])
+                            e = (a + b + c + d) / 4
 
                             # вычисление рёбра от каждой точки до центра субокна
                             ae = sqrt((a - e) ** 2 + (sdi / 2) ** 2)
@@ -402,6 +492,7 @@ class FractalAnalysis:
         self._check_image(img)
         # если изображение успешно проверено, оно загружается в объект класса
         self._img = img
+        self._segments = np.zeros(self._img.shape, dtype=np.uint8)
 
         # проверка параметров поля и загрузка их в объект класса
         self._win_size, self._dx, self._dy = self._check_field_parameters(method, win_size, dx, dy, field)
@@ -411,119 +502,6 @@ class FractalAnalysis:
         # генерация поля, если оно не задано
         if self.field is None:
             self._generate_field()
-
-    def _check_n_comp(self, n_comp):
-        """
-        Проверка числа компонент в смеси распределений, введенного пользователем
-
-        :param n_comp : int
-            Число компонент в смеси распределений
-
-        :return: n_comp : int
-            Обработанное число компонент в смеси
-
-        """
-        try:
-            # число компонент может быть только 2 или 3
-            if n_comp != 2 and n_comp != 3:
-                raise ValueError('n_comp can be 2 or 3 only')
-        except ValueError:
-            # если введено число меньше 2, оно увеличивается его до 2
-            if n_comp < 2:
-                n_comp = 2
-                print('n_comp has been changed to 2')
-            # если больше 3, то оно уменьшается его до 3
-            elif n_comp > 3:
-                print('n_comp has been changed to 3')
-                n_comp = 3
-            # если в диапозоне (2, 3), оно округляется до ближайшего целого
-            elif 2 < n_comp < 3:
-                n_comp = round(n_comp)
-                print('n_comp has been changed to ', str(n_comp))
-        return n_comp
-
-    def _check_median_kernel(self, median_kernel):
-        """
-        Проверка заданной пользователем ширины медианного фильтра
-
-        :param median_kernel: int
-            Ширина медианного фильтра, введённая пользователем
-
-        :return: median_kernel: int
-            Обработанная ширина медианного фильтра
-
-        """
-        # ширина медианного фильтра не может быть меньше 1
-        if median_kernel < 1:
-            raise ValueError('median_kernel cannot be non-positive')
-        try:
-            # ширина медианного фильтра должна быть нечётной
-            if (median_kernel % 2) == 0:
-                raise ValueError('median_kernel cannot be even')
-        except ValueError:
-            # если введенно чётное число, оно уменьшается или увеличивается до нечётного
-            if median_kernel + 1 < min(self._img.shape):
-                median_kernel += 1
-            elif median_kernel - 1 > 0:
-                median_kernel -= 1
-            else:
-                raise ValueError('Invalid value of median_kernel')
-        return median_kernel
-
-    def _check_0_1(self, value):
-        """
-        Проверка нахождения значения переменной в диапозоне [0, 1]
-
-        :param value : float
-            Переменная, введённая пользователем
-
-        """
-        if value < 0 or value > 1:
-            raise ValueError('Value can be in range [0, 1] only')
-
-    def _check_positive(self, value):
-        """
-        Проверка положительности значения переменной, введённой пользователем
-
-        :param value : float
-            Переменная, введённая пользователем
-
-        """
-        # значение не должно быть меньше или равно 0
-        if value <= 0:
-            raise ValueError('Value can be positive only')
-
-    def _check_int(self, value):
-        """
-        Проверка значения переменной на целое число
-
-        :param value: int
-            Переменная, введённая пользователем
-
-        """
-        # для целого значения результаты приведения к типам int и float должны быть одинаковыми
-        if int(value) != float(value):
-            raise TypeError('Value can be integer only')
-
-    def _check_folder(self, folder):
-        """
-        Проверка существования заданного пользователем пути директории в файловой системе
-
-        :param folder: str
-            Путь директории в файловой системе, заданный пользователем
-
-        :return: folder: str
-            Обработанный путь директории в файловой системе
-
-        """
-        try:
-            if not os.path.isdir(folder):
-                raise ValueError(str(folder) + ' is invalid path')
-        except ValueError:
-            # если введённой директории не существует, она будет заменена на текущую директорию
-            folder = '.'
-            print('Result will be save in ' + os.getcwd())
-        return folder
 
     def _find_extr(self, data):
         """
@@ -582,13 +560,9 @@ class FractalAnalysis:
             extr = np.append(extr, [i])
         return ampl, extr
 
-    def _segment_field_change(self,
-                              folder='.'):
+    def _segment_field_change(self):
         """
         Сегментация переходного слоя по сильным изменения поля
-
-        :param folder: str. По умолчанию = '.'
-            Путь к директории, где необходимо сохранить результат.
 
         """
         # массивы точек начала и конца сильных изменений соответственно
@@ -620,7 +594,7 @@ class FractalAnalysis:
         change_begin = np.delete(change_begin, 0, axis=0)
         change_end = np.delete(change_end, 0, axis=0)
 
-        # перевод точек сильного изменения поля в размерность изображения
+        # перевод точек переходного изменения поля в размерность изображения
         for point in change_begin:
             point[0] = int(point[0] * self._dx + self._win_size / 2)
             point[1] = int(point[1] * self._dy + self._win_size / 2)
@@ -629,15 +603,11 @@ class FractalAnalysis:
             point[0] = int(point[0] * self._dx + self._win_size / 2)
             point[1] = int(point[1] * self._dy + self._win_size / 2)
 
-        # Для определения параметра eps алгоритма DBSCAN выполняются следующие действия:
-        # 1. вычисляется средние расстояния между каждой точкой и её 11 соседями
+        # Оценка параметра eps алгоритма DBSCAN
         nearest_neighbors = NearestNeighbors(n_neighbors=11)
         neighbors = nearest_neighbors.fit(change_begin)
         distances, indices = neighbors.kneighbors(change_begin)
         distances = np.sort(distances[:, 10], axis=0)
-
-        # 2. средние расстояния выстраиваются в порядке возрастания
-        # 3. за eps берётся точка с максимальной кривизной
         i = np.arange(len(distances))
         knee = KneeLocator(i, distances, S=1, curve='convex', direction='increasing', interp_method='polynomial')
 
@@ -699,33 +669,26 @@ class FractalAnalysis:
             plt.show()
             plt.close()
 
-        plt.figure(figsize=(13, 7))
-
         # проход по каждому кластеру
         for i in np.unique(filtered_labels):
             x = clustered_change_begin[filtered_labels == i, 0]
             y1 = clustered_change_begin[filtered_labels == i, 1]
             y2 = clustered_change_end[filtered_labels == i, 1]
 
-            # строится регрессионная модель для точек, соответствующих началу сильного изменения поля
-            z1 = lowess(y1, x, frac=1. / 10)
-            # строится регрессионная модель для точек, соответствующих концу сильного изменения поля
-            z2 = lowess(y2, x, frac=1. / 10)
+            # строится регрессионная модель для точек, соответствующих началу переходного изменения поля
+            z1 = lowess(y1, x, frac=0.1)
+            # строится регрессионная модель для точек, соответствующих концу переходного изменения поля
+            z2 = lowess(y2, x, frac=0.1)
 
-            # построение усреднённой линии для кластера
-            plt.plot(z1[:, 0], z1[:, 1], '--', c='red', lw=2)
-            plt.plot(z2[:, 0], z2[:, 1], '--', c='red', lw=2)
-            plt.fill_between(z1[:, 0], z1[:, 1], z2[:, 1], facecolor='red', alpha=0.1)
-            red_square = lns.Line2D([], [], color='red', marker='s', linestyle='None',
-                                    markersize=7, label='Переходный слой')
-            plt.legend(handles=[red_square])
+            # округляем точки до целых, чтобы поставить им в соответствие пиксели изображения
+            points_beg = np.around(z1).astype(np.int32)
+            points_beg = points_beg.reshape((-1, 1, 2))
+            points_end = np.around(z2).astype(np.int32)
+            points_end = np.flipud(points_end).reshape((-1, 1, 2))
+            pts = np.concatenate([points_beg, points_end, points_beg[0].reshape((-1, 1, 2))])
 
-        plt.imshow(imgRGB)
-
-        # сохранение результата, если необходимо
-        if self._save_result:
-            plt.savefig(folder + '/' + strftime("%d-%m-%Y %H-%M-%S") + '.png', dpi=100)
-        plt.show()
+            # рисуем на маске линии начала и конца изменения и закрашиваем область между ними
+            cv.fillPoly(self._segments, [pts], 255)
 
     def _segment_distribution(self, img, intensity):
         """
@@ -752,20 +715,10 @@ class FractalAnalysis:
         kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
         morph_close = cv.morphologyEx(morph_open, cv.MORPH_CLOSE, kernel)
 
-        # размытие по Гауссу границ объектов с радиусом - размер измерительного окна
-        # radius = self._win_size if self._win_size % 2 == 1 else self._win_size - 1
-        radius = int(self._win_size / 2 if self._win_size / 2 % 2 == 1 else self._win_size / 2 - 1)
-
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (radius, radius))
-        blur = cv.dilate(morph_close, kernel)
-
-        # blur = cv.GaussianBlur(morph_close, (radius, radius), 0)
-        _, thresh = cv.threshold(blur, 30, 255, cv.THRESH_BINARY)
-
         # выделение объектов на изображении и составление статистики
-        contours, hierarchy = cv.findContours(thresh.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        cv.drawContours(thresh, contours, -1, 100, 2, cv.LINE_AA, hierarchy, 3)
-        nb_components, output, stats, centroids = cv.connectedComponentsWithStats(thresh, 4, cv.CV_32S)
+        contours, hierarchy = cv.findContours(morph_close.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        cv.drawContours(morph_close, contours, -1, 100, 2, cv.LINE_AA, hierarchy, 3)
+        nb_components, output, stats, centroids = cv.connectedComponentsWithStats(morph_close, 4, cv.CV_32S)
 
         # вычисление средней площади всех объектов
         meanS = np.mean(stats[1:, -1])
@@ -778,6 +731,11 @@ class FractalAnalysis:
             # заносятся только те объекты, площадь которых больше средней площади всех объектов
             if stats[i, -1] > meanS:
                 img2[output == i] = 255
+
+        # наращивание объектов
+        radius = int(self._win_size / 2 if self._win_size / 2 % 2 == 1 else self._win_size / 2 - 1)
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (radius, radius))
+        result = cv.dilate(img2, kernel)
 
         if self._show_step:
             plt.subplot(2, 3, 1)
@@ -805,30 +763,27 @@ class FractalAnalysis:
             plt.yticks([])
 
             plt.subplot(2, 3, 5)
-            plt.imshow(thresh, cmap='gray')
-            plt.title('Blur&Thresh')
-            plt.xticks([])
-            plt.yticks([])
-
-            plt.subplot(2, 3, 6)
             plt.imshow(img2, cmap='gray')
             plt.title('Sort')
             plt.xticks([])
             plt.yticks([])
 
+            plt.subplot(2, 3, 6)
+            plt.imshow(result, cmap='gray')
+            plt.title('Blur&Thresh')
+            plt.xticks([])
+            plt.yticks([])
+
             plt.show()
 
-        return img2
+        return result
 
-    def _segment_min_distribution(self, n_comp, folder):
+    def _segment_min_distribution(self, n_comp):
         """
         Сегментация переходного слоя через EM-классификацию
 
         :param n_comp: int
             Количество компонент в смеси распределений
-
-        :param folder: str. По умолчанию = '.'
-            Путь к директории, где необходимо сохранить результат.
 
         """
         # классификация значений поля по EM-алгоритму с тремя компонентами в смеси
@@ -853,45 +808,16 @@ class FractalAnalysis:
         # получаем маску
         mask_stratum = self._segment_distribution(field_pr_img, intensive_stratum)
 
-        # обрезка изображения и перевод в пространство RGB
-        imgRGB = cv.cvtColor(self._img[int(self._win_size / 2): -int(self._win_size / 2) + 1,
-                             int(self._win_size / 2): -int(self._win_size / 2) + 1],
-                             cv.COLOR_GRAY2RGB)
-
-        # увеличение маски до размеров изображения
-        mask_stratum = cv.resize(mask_stratum, np.flip(imgRGB.shape[:2]), fx=self._dx, fy=self._dy,
-                                 interpolation=cv.INTER_LINEAR_EXACT)
-
-        # создание слоя-заливки
-        color_layer = np.zeros(imgRGB.shape, dtype=np.uint8)
-        color_layer[:] = (255, 0, 102)
-
-        # наложение заливки на изображение через маску
-        # получаются закрашенные области переходного слоя
-        stratum = cv.bitwise_and(imgRGB, color_layer, mask=mask_stratum)
-
-        # соединение исходного изображения с полупрозрачными закрашенными областями
-        result = cv.addWeighted(imgRGB, 1, stratum, 0.1, 0.0)
-
-        # выделение контуров закрашенных областей
-        contours, hierarchy = cv.findContours(mask_stratum.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        cv.drawContours(result, contours, -1, (102, 0, 153), 1, cv.LINE_AA, hierarchy, 3)
-
-        # перевод результата в пространство RGB
-        result = cv.cvtColor(result, cv.COLOR_BGR2RGB)
-
-        plt.figure(figsize=(13, 7))
-        plt.imshow(result)
-        purple_square = lns.Line2D([], [], color=(0.4, 0, 0.6), marker='s', linestyle='None',
-                                   markersize=7, label='Переходный слой')
-        plt.legend(handles=[purple_square])
-        if self._save_result:
-            plt.savefig(folder + '/' + strftime("%d-%m-%Y %H-%M-%S") + '.png', dpi=100)
-        plt.show()
+        # переносим получившуюся маску поля на маску для изображения
+        mask_stratum = cv.resize(mask_stratum,
+                                 np.flip((self._img.shape[0] - self._win_size + 1,
+                                          self._img.shape[1] - self._win_size + 1)),
+                                 fx=self._dx, fy=self._dy, interpolation=cv.INTER_LINEAR_EXACT)
+        self._segments[int(self._win_size / 2): -int(self._win_size / 2) + 1,
+                       int(self._win_size / 2): -int(self._win_size / 2) + 1] = mask_stratum
 
     def segment_stratum(self,
                         n_comp,
-                        folder='.',
                         median_kernel=None,
                         min_transition=None,
                         distance=None,
@@ -903,14 +829,11 @@ class FractalAnalysis:
         :param n_comp: int
             Количество компонент в смеси распределений фрактальных размерностей.
 
-        :param folder: str, по умолчанию = '.'
-            Путь к директории, где необходимо сохранить результат.
-
         :param median_kernel: int, по умолчанию = None
             Ширина медианного фильтра, введённая пользователем
 
         :param min_transition: float, по умолчанию = None
-            Величина изменения фрактальной размерности на границе двух текстур, введённая пользователем
+            Минимальная величина переходного изменения
 
         :param distance: float, по умолчанию = None
             Максимальное расстояние между точками одного кластера, введённое пользователем
@@ -920,7 +843,6 @@ class FractalAnalysis:
 
         """
         n_comp = self._check_n_comp(n_comp)
-        folder = self._check_folder(folder)
 
         if median_kernel is not None:
             self._median_kernel = self._check_median_kernel(median_kernel)
@@ -938,9 +860,11 @@ class FractalAnalysis:
         if n_comp == 2:
             # если количество компонент в смеси распределений - 2,
             # то сегментация проходит по сильным изменениям размерности
-            self._segment_field_change(folder)
+            self._segment_field_change()
         else:
             # если количество компонент в смеси распределений - 3,
             # то сегментация проходит по выделению областей,
             # принадлежащим распределению с минимальным математическим ожиданием
-            self._segment_min_distribution(n_comp, folder)
+            self._segment_min_distribution(n_comp)
+
+        return self._segments

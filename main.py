@@ -1,10 +1,12 @@
-from tkinter import Tk
-from tkinter.filedialog import askopenfilename, askdirectory
 import os.path
 import cv2 as cv
+import numpy as np
+import matplotlib.lines as lns
 import tkinter.messagebox as mb
 import matplotlib.pyplot as plt
-import numpy as np
+
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
 from FractalAnalysisClass import FractalAnalysis
 
 
@@ -108,12 +110,12 @@ def field_to_image(input_field, show=False):
     """
     Перевод поля фрактальных размерностей в пространство оттенков серого
     
-    :param input_field:     2-D numpy массив
-        Поле фрактальных размерностей
-    :param show:            bool
+    :param input_field: 2-D numpy массив
+        Поле фрактальных размерностей.
+    :param show: bool
         True, если необходимо вывести изображение визуализации поля
     
-    :return:                2-D numpy массив
+    :return img_out: 2-D numpy массив
         Изображение-визуализация поля фрактальных размерностей
     """
     img_out = np.empty((input_field.shape[0], input_field.shape[1]), dtype=np.uint8)
@@ -133,68 +135,72 @@ def field_to_image(input_field, show=False):
 # вспомогательные флаги-переменные
 flag_convert = False
 flag_filter = False
+image_uploaded = False
 
-# получение имени файла и пути к нему
-Tk().withdraw()
-image_name = askopenfilename()
-path_with_name, file_extension = os.path.splitext(image_name)
-folder, filename = os.path.split(path_with_name)
+while not image_uploaded:
+    # получение имени файла и пути к нему
+    Tk().withdraw()
+    image_name = askopenfilename()
+    path_with_name, file_extension = os.path.splitext(image_name)
+    folder, filename = os.path.split(path_with_name)
 
-# чтение изображения из файла
-try:
-    # если изображение не формата .jpeg, необходимо его конвертировать
-    if file_extension != '.jpg' and file_extension != '.JPG' \
-            and file_extension != '.jpeg' and file_extension != '.JPEG':
-        # читаем файл
-        imgForConvert = cv.imread(image_name)
-        # временное сохранение изображения в формате .jpeg в рабочей папке
-        cv.imwrite('modified_img.jpg', imgForConvert, [int(cv.IMWRITE_JPEG_QUALITY), 100])
-        image_name = 'modified_img.jpg'
-        del imgForConvert
-        flag_png = True
+    # чтение изображения из файла
+    try:
+        # если изображение не формата .jpeg, необходимо его конвертировать
+        if file_extension != '.jpg' and file_extension != '.JPG' \
+                and file_extension != '.jpeg' and file_extension != '.JPEG':
+            # читаем файл
+            imgForConvert = cv.imread(image_name)
+            # временное сохранение изображения в формате .jpeg в рабочей папке
+            cv.imwrite('modified_img.jpg', imgForConvert, [int(cv.IMWRITE_JPEG_QUALITY), 100])
+            image_name = 'modified_img.jpg'
+            del imgForConvert
+            flag_png = True
 
-    # чтение изображение
-    imgorig = cv.imread(image_name)
-except Exception as e:
-    # вызывается исключение, если на вход был подан не поддерживаемый формат изображения
-    mb.showerror("Error", 'Invalid image file')
+        # чтение изображение
+        imgorig = cv.imread(image_name)
+    except Exception as e:
+        # вызывается исключение, если на вход был подан не поддерживаемый формат изображения
+        mb.showerror("Error", 'Invalid image file')
+        continue
 
-# если была совершена конвертация, временный файл с изображением в формате .jpeg удаляется
-if flag_convert:
-    os.remove('modified_img.jpg')
+    # если была совершена конвертация, временный файл с изображением в формате .jpeg удаляется
+    if flag_convert:
+        os.remove('modified_img.jpg')
 
-print('Clear the image from noise? 1 - Yes, 0 - No\n')
-tfi = int(input())
-# 1 - Шумы на изображении будут обработаны
-# 0 - Изображение останется с шумами
-if tfi == 1:
-    # вывод гистограммы распределения интенсивности яркостей пикселей в изображении,
-    # по которой можно определить пороговые значения интенсивности
-    plt.hist(imgorig.ravel(), 256, [0, 256])
-    plt.show()
+    image_uploaded = True
 
-    # значения по умолчанию
-    up = 170
-    low = 30
+    print('Clear the image from noise? 1 - Yes, 0 - No\n')
+    tfi = int(input())
+    # 1 - Шумы на изображении будут обработаны
+    # 0 - Изображение останется с шумами
+    if tfi == 1:
+        # вывод гистограммы распределения интенсивности яркостей пикселей в изображении,
+        # по которой можно определить пороговые значения интенсивности
+        plt.hist(imgorig.ravel(), 256, [0, 256])
+        plt.show()
 
-    print('Default parameters for noice (upper=170, lower=30)? 1 - Yes, 0 - No')
-    if int(input()) == 0:
-        print('Enter upper limit - ', end='')
-        up = int(input())
-        print('Enter lower limit - ', end='')
-        low = int(input())
+        # значения по умолчанию
+        up = 170
+        low = 30
 
-    # обработка изображения (удаление шумов)
-    img = noice(imgorig, lower=low, upper=up, plot=True)
+        print('Default parameters for noice (upper=170, lower=30)? 1 - Yes, 0 - No')
+        if int(input()) == 0:
+            print('Enter upper limit - ', end='')
+            up = int(input())
+            print('Enter lower limit - ', end='')
+            low = int(input())
 
-    # перевод изображения в пространство оттенков серого
-    img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    flag_filter = True
-else:
-    # перевод изображения в пространство оттенков серого
-    img = cv.cvtColor(imgorig, cv.COLOR_BGR2GRAY)
+        # обработка изображения (удаление шумов)
+        img = noice(imgorig, lower=low, upper=up, plot=True)
 
-del imgorig
+        # перевод изображения в пространство оттенков серого
+        img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        flag_filter = True
+    else:
+        # перевод изображения в пространство оттенков серого
+        img = cv.cvtColor(imgorig, cv.COLOR_BGR2GRAY)
+
 
 # вывод загруженного/обработанного изображения
 plt.imshow(img, cmap='gray')
@@ -247,7 +253,8 @@ else:
     dy = int(input())
 
     # создание поля
-    fractal.set_field(img, win_size, dx, dy, method='cubes')
+    fractal.set_field(img, win_size, dx, dy, method='prism')
+
     # визуализация полученного поля
     field_to_image(fractal.field, show=True)
 
@@ -266,16 +273,55 @@ ax.set_title('Distribution of fractal dimensions')
 plt.tight_layout()
 plt.show()
 
-# ввод количества распределений в смеси
-print('Enter number components in a mixture of distributions - ', end='')
+print('Exit - 0, or\nEnter number components in a mixture of distributions - ', end='')
 n_comp = int(input())
 
 # сегментация переходного слоя на изображении
 # n_comp=2 - сегментация по сильному изменению поля
 # n_comp=3 - сегментация по EM-классификации
-fractal.segment_stratum(n_comp, folder=folder)
+mask_stratum = fractal.segment_stratum(n_comp)
+
+imgorig = cv.cvtColor(imgorig, cv.COLOR_BGR2RGB)
+# создание слоя-заливки
+color_layer = np.zeros(imgorig.shape, dtype=np.uint8)
+color_layer[:] = (30, 21, 117) if n_comp == 2 else (255, 0, 102)
+
+# наложение заливки на изображение через маску
+# получаются закрашенные сегменты переходного слоя
+stratum = cv.bitwise_and(imgorig, color_layer, mask=mask_stratum)
+
+# соединение исходного изображения с полупрозрачными закрашенными сегментами
+result = cv.addWeighted(imgorig, 1, stratum, 0.2, 0.0)
+
+# выделение контуров сегментов
+color_contours = (0, 0, 255) if n_comp == 2 else (102, 0, 153)
+contours, hierarchy = cv.findContours(mask_stratum, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+cv.drawContours(result, contours, -1, color_contours, 1, cv.LINE_AA, hierarchy, 3)
+
+# перевод результата в пространство RGB
+result = cv.cvtColor(result, cv.COLOR_BGR2RGB)
+
+color_square = (1, 0, 0) if n_comp == 2 else (0.4, 0, 0.6)
+plt.figure(figsize=(13, 7))
+plt.imshow(result)
+purple_square = lns.Line2D([], [], color=color_square, marker='s', linestyle='None',
+                           markersize=7, label='Переходный слой')
+plt.legend(handles=[purple_square])
+plt.show()
 
 """
+def EM(X, n_comp):
+    model = GaussianMixture(n_components=n_comp, covariance_type='full')
+    model.fit(np.expand_dims(X.flatten(), 1))
+    predict = model.predict(np.expand_dims(X.flatten(), 1))
+    print(model.means_)
+    print(model.covariances_)
+
+    predict = np.resize(predict, X.shape)
+    field_pr_img = predict / (n_comp - 1) * 255
+    field_pr_img = field_pr_img.astype(np.uint8)
+    cv.imshow('pr', field_pr_img)
+    
 # get area of largest contour
     contours = cv.findContours(mask_inv[:, :, 0], cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
     contours = contours[0] if len(contours) == 2 else contours[1]
@@ -2035,8 +2081,3 @@ def EMwithAdding():
 
 
         plt.show()"""
-
-'''
->>>>>>> 4e9401b4c0aba1445f05a0b4f173a62ade31b2c9
-=======
-'''
