@@ -10,7 +10,7 @@ from tkinter.filedialog import askopenfilename
 from FractalAnalysisClass import FractalAnalysis
 
 
-def noice(img_orig, lower, upper, plot=False):
+def noise(img_orig, lower, upper, plot=False):
     """
     Функция избавляется от шумов на изображении (чёрные или белые пятна)
 
@@ -185,7 +185,7 @@ while not image_uploaded:
         up = 170
         low = 30
 
-        print('Default parameters for noice (upper=170, lower=30)? 1 - Yes, 0 - No')
+        print('Default parameters for noise (upper=170, lower=30)? 1 - Yes, 0 - No')
         if int(input()) == 0:
             print('Enter upper limit - ', end='')
             up = int(input())
@@ -193,7 +193,7 @@ while not image_uploaded:
             low = int(input())
 
         # обработка изображения (удаление шумов)
-        img = noice(imgorig, lower=low, upper=up, plot=True)
+        img = noise(imgorig, lower=low, upper=up, plot=True)
 
         # перевод изображения в пространство оттенков серого
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -1070,7 +1070,7 @@ if flag_convert:
 print('Clear the image from noise? 1 - Yes, 0 - No\n')
 tfi = int(input())
 if tfi == 1:
-    A = noice(img=imgorig, plot=True)
+    A = noise(img=imgorig, plot=True)
     A = cv.cvtColor(A, cv.COLOR_BGR2GRAY)
     flag_filter = True
 else:
