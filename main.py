@@ -136,6 +136,7 @@ def field_to_image(input_field, show=False):
 flag_convert = False
 flag_filter = False
 image_uploaded = False
+field_uploaded = False
 
 while not image_uploaded:
     # получение имени файла и пути к нему
@@ -226,23 +227,30 @@ comm = int(input())
 # 1 - Прочитать поле размерностей из файла и ввести его в анализатор
 # 0 - Поле будет создано анализатором
 if comm == 1:
-    # чтение фрактального поля из файла
-    Tk().withdraw()
-    uploadfilename = askopenfilename()
-    field = np.loadtxt(uploadfilename, delimiter=";")
+    while not field_uploaded:
+        # чтение фрактального поля из файла
+        Tk().withdraw()
+        uploadfilename = askopenfilename()
+        field = np.loadtxt(uploadfilename, delimiter=";")
 
-    print('Enter size of window for uploaded field - ', end='')
-    win_size = int(input())
-    print('Enter dx for uploaded field - ', end='')
-    dx = int(input())
-    print('Enter dy for uploaded field - ', end='')
-    dy = int(input())
+        print('Enter size of window for uploaded field - ', end='')
+        win_size = int(input())
+        print('Enter dx for uploaded field - ', end='')
+        dx = int(input())
+        print('Enter dy for uploaded field - ', end='')
+        dy = int(input())
 
-    # визуализация поля
-    field_to_image(field, show=True)
+        # визуализация поля
+        field_to_image(field, show=True)
 
-    # загрузка в анализатор поля и его параметров
-    fractal.set_field(img, win_size, dx, dy, field=field)
+        try:
+            # загрузка в анализатор поля и его параметров
+            fractal.set_field(img, win_size, dx, dy, field=field)
+        except ValueError:
+            # вызывается исключение, если размер поля не соответствует размерам изображения
+            mb.showerror("Error", 'The shape of the field does not match the shape of the image.\nTry again!')
+            continue
+        field_uploaded = True
 else:
     # ввод параметров поля
     print('Enter size of window - ', end='')
