@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
+import FunctionsDistance
 
 from kneed import KneeLocator
 from math import ceil, log, sqrt
@@ -58,6 +59,9 @@ class FractalAnalysis:
     field : 2-D numpy массив, по умолчанию = None
         Поле фрактальных размерностей
 
+    distances_curves : кортеж из двух объектов - 1-D numpy массива и 3-D numpy массива, по умолчанию = None
+        Кортеж из массива расстояний между кривыми и координат начала первой кривой и конца второй
+
     _segments : 2-D numpy массив, по умолчанию = None
         Бинарное изображение, содержащее найденные сегменты текстур
 
@@ -72,16 +76,17 @@ class FractalAnalysis:
         self._dx = 1
         self._dy = 1
         self._show_step = show_step
-        self._min_samples = 8
+        self._min_samples = 16
         self._distance = -1
-        self._min_transition = 0.4
-        self._median_kernel = 21
+        self._min_transition = 0.5
+        self._median_kernel = 31
         self._method = None
         self._windows = None
         self._sub_windows_sizes = None
         self._img = None
         self._segments = None
         self.field = None
+        self.distances_curves = None
 
     def _check_image(self, img):
         """
@@ -569,15 +574,46 @@ class FractalAnalysis:
         change_begin = np.array([0, 0], dtype=np.uint32)
         change_end = np.array([0, 0], dtype=np.uint32)
 
+        '''
+        Для исследований!
+
+        print('Show filter? 1 - Yes, 0 - No')
+        sf = int(input())
+        sfcol = -1
+        if sf:
+            print('Choose column or write -1  ', end='')
+            plt.imshow(cv.cvtColor(self._img[int(self._win_size / 2): -int(self._win_size / 2) + 1,
+                                   int(self._win_size / 2): -int(self._win_size / 2) + 1], cv.COLOR_GRAY2RGB))
+            plt.xticks(np.arange(0, self._img.shape[1] - self._win_size, 50))
+            plt.show()
+            sfcol = int(input())
+            
+        '''
+
         # проход по каждому столбцу в поле
-        for col in range(self.field.shape[1]):
-            column = self.field[:, col]
+        for n, column in enumerate(self.field.T):  # range(self.field.shape[1]):
+            # column = self.field[:, col]
 
             # медианная оценка выборки
-            MedianFilter = medfilt(column, kernel_size=self._median_kernel)
+            filter_column = medfilt(column, kernel_size=self._median_kernel)
 
             # координаты локальных экстремумов и разность значений между ними
-            amplMF, extrMF = self._find_extr(MedianFilter)
+            amplMF, extrMF = self._find_extr(filter_column)
+
+            """
+            if sf and n == sfcol:
+                ampl, extr = self._find_extr(column)
+
+                fig, axis = plt.subplots(1, 2)
+                axis[0].bar(extr[1:], ampl, color='purple')
+                axis[0].plot(column, color='#FF7F00', linewidth=1)
+
+                axis[1].bar(extrMF[1:], amplMF, color='blue')
+                axis[1].plot(filter_column, color='#FF7F00', linewidth=1)
+
+                plt.show()
+                plt.close()
+            """
 
             # Выделение областей, в которых разность между экстремумами больше,
             # чем величина изменения фрактальной размерности на границе двух текстур
@@ -588,11 +624,21 @@ class FractalAnalysis:
                     # так как на границах поле искажено
                     if j != 0 and j < extrMF.shape[0] - 1:
                         if 0 < extrMF[j] < self.field.shape[0] - 1 and extrMF[j + 1] < self.field.shape[0] - 1:
-                            change_begin = np.vstack([change_begin, np.array([col, extrMF[j]])])
-                            change_end = np.vstack([change_end, np.array([col, extrMF[j + 1]])])
+                            change_begin = np.vstack([change_begin, np.array([n, extrMF[j]])])
+                            change_end = np.vstack([change_end, np.array([n, extrMF[j + 1]])])
 
         change_begin = np.delete(change_begin, 0, axis=0)
         change_end = np.delete(change_end, 0, axis=0)
+
+        '''
+        Для исследования!
+        
+        imgRGB = cv.cvtColor(self._img, cv.COLOR_GRAY2RGB)
+        plt.imshow(imgRGB)
+        plt.scatter(change_begin[:, 0], change_begin[:, 1], c='red', s=1)
+        plt.scatter(change_end[:, 0], change_end[:, 1], c='red', s=1)
+        plt.show()
+        '''
 
         # перевод точек переходного изменения поля в размерность изображения
         for point in change_begin:
@@ -669,6 +715,10 @@ class FractalAnalysis:
             plt.show()
             plt.close()
 
+        n_cluster = np.unique(filtered_labels).shape[0]
+        distances_of_curves = (np.zeros(shape=n_cluster), np.zeros(shape=(n_cluster, 2, 2)))
+        i_cluster = 0
+
         # проход по каждому кластеру
         for i in np.unique(filtered_labels):
             x = clustered_change_begin[filtered_labels == i, 0]
@@ -680,6 +730,13 @@ class FractalAnalysis:
             # строится регрессионная модель для точек, соответствующих концу переходного изменения поля
             z2 = lowess(y2, x, frac=0.1)
 
+            distances_of_curves[0][i_cluster] = FunctionsDistance.functions_distance(z1, z2)
+
+            plt.plot(z1[:, 0], z1[:, 1], '--', c='blue', linewidth=3)
+            plt.plot(z2[:, 0], z2[:, 1], '--', c='blue', linewidth=3)
+            plt.annotate('{}'.format(distances_of_curves[0][i_cluster]), xy=(z1[0, 0], z1[0, 1]),
+                         xytext=(z1[0, 0], z1[0, 1]), arrowprops={'facecolor': 'white', 'shrink': 0.1})
+
             # округляем точки до целых, чтобы поставить им в соответствие пиксели изображения
             points_beg = np.around(z1).astype(np.int32)
             points_beg = points_beg.reshape((-1, 1, 2))
@@ -687,8 +744,17 @@ class FractalAnalysis:
             points_end = np.flipud(points_end).reshape((-1, 1, 2))
             pts = np.concatenate([points_beg, points_end, points_beg[0].reshape((-1, 1, 2))])
 
+            distances_of_curves[1][i_cluster, 0] = points_beg[0][0]
+            distances_of_curves[1][i_cluster, 1] = points_end[0][0]
+
             # рисуем на маске линии начала и конца изменения и закрашиваем область между ними
             cv.fillPoly(self._segments, [pts], 255)
+
+            i_cluster += 1
+
+        plt.show()
+
+        self.distances_curves = distances_of_curves
 
     def _segment_distribution(self, img, intensity):
         """
@@ -814,7 +880,7 @@ class FractalAnalysis:
                                           self._img.shape[1] - self._win_size + 1)),
                                  fx=self._dx, fy=self._dy, interpolation=cv.INTER_LINEAR_EXACT)
         self._segments[int(self._win_size / 2): -int(self._win_size / 2) + 1,
-                       int(self._win_size / 2): -int(self._win_size / 2) + 1] = mask_stratum
+        int(self._win_size / 2): -int(self._win_size / 2) + 1] = mask_stratum
 
     def segment_stratum(self,
                         n_comp,
