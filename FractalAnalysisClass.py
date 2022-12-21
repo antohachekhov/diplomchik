@@ -3,13 +3,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import FunctionsDistance
 
-from kneed import KneeLocator
+# from kneed import KneeLocator
+from KneeLocatorModule import KneeLocator
 from math import ceil, log, sqrt
 from scipy.signal import medfilt
 from sklearn.cluster import DBSCAN
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
 from statsmodels.nonparametric.api import lowess
+
+# from finta import TA
 
 
 class FractalAnalysis:
@@ -76,10 +79,10 @@ class FractalAnalysis:
         self._dx = 1
         self._dy = 1
         self._show_step = show_step
-        self._min_samples = 16
+        self._min_samples = 8
         self._distance = -1
-        self._min_transition = 0.5
-        self._median_kernel = 31
+        self._min_transition = 0.4
+        self._median_kernel = 21
         self._method = None
         self._windows = None
         self._sub_windows_sizes = None
@@ -87,6 +90,8 @@ class FractalAnalysis:
         self._segments = None
         self.field = None
         self.distances_curves = None
+        self.distances_curves_vertical = None
+        self.EMmodel = None
 
     def _check_image(self, img):
         """
@@ -462,6 +467,11 @@ class FractalAnalysis:
         else:
             self._method_prism()
 
+    def set_param(self, minsamples, min_transition, median_kernel):
+        self._min_samples = minsamples
+        self._min_transition = min_transition
+        self._median_kernel = median_kernel
+
     def set_field(self,
                   img,
                   win_size,
@@ -574,11 +584,12 @@ class FractalAnalysis:
         change_begin = np.array([0, 0], dtype=np.uint32)
         change_end = np.array([0, 0], dtype=np.uint32)
 
-        '''
-        Для исследований!
 
-        print('Show filter? 1 - Yes, 0 - No')
-        sf = int(input())
+        # Для исследований!
+
+        #print('Show filter? 1 - Yes, 0 - No')
+        sf = 0
+        #sf = int(input())
         sfcol = -1
         if sf:
             print('Choose column or write -1  ', end='')
@@ -587,8 +598,8 @@ class FractalAnalysis:
             plt.xticks(np.arange(0, self._img.shape[1] - self._win_size, 50))
             plt.show()
             sfcol = int(input())
-            
-        '''
+
+
 
         # проход по каждому столбцу в поле
         for n, column in enumerate(self.field.T):  # range(self.field.shape[1]):
@@ -596,6 +607,7 @@ class FractalAnalysis:
 
             # медианная оценка выборки
             filter_column = medfilt(column, kernel_size=self._median_kernel)
+            # filter_column = lowess(column, np.arange(0, self._img.shape[0] - self._win_size + 1, 1), frac=0.1)[:, 1]
 
             # координаты локальных экстремумов и разность значений между ними
             amplMF, extrMF = self._find_extr(filter_column)
@@ -604,16 +616,20 @@ class FractalAnalysis:
             if sf and n == sfcol:
                 ampl, extr = self._find_extr(column)
 
-                fig, axis = plt.subplots(1, 2)
-                axis[0].bar(extr[1:], ampl, color='purple')
-                axis[0].plot(column, color='#FF7F00', linewidth=1)
+                fig, axis = plt.subplots(1, 1)
+                # axis.bar(extr[1:], ampl, color='purple')
+                axis.plot(column, color='#FF7F00', linewidth=1)
 
-                axis[1].bar(extrMF[1:], amplMF, color='blue')
-                axis[1].plot(filter_column, color='#FF7F00', linewidth=1)
+                # axis.bar(extrMF[1:], amplMF, color='blue')
+                axis.plot(filter_column, color='green', linewidth=1)
+                z = lowess(column, np.arange(0, self._img.shape[0] - self._win_size + 1, 1), frac=0.1)
+                axis.plot(z[:, 0], z[:, 1], color='red', linewidth=1)
+                TA.FAMA(column)
 
                 plt.show()
                 plt.close()
             """
+
 
             # Выделение областей, в которых разность между экстремумами больше,
             # чем величина изменения фрактальной размерности на границе двух текстур
@@ -630,6 +646,7 @@ class FractalAnalysis:
         change_begin = np.delete(change_begin, 0, axis=0)
         change_end = np.delete(change_end, 0, axis=0)
 
+        print('-- Медианная фильтрация')
         '''
         Для исследования!
         
@@ -664,6 +681,7 @@ class FractalAnalysis:
         # кластеризация точек, соответствующих началу изменения
         dbscan_cluster = DBSCAN(eps=self._distance, min_samples=self._min_samples)
         dbscan_cluster.fit(change_begin)
+        print('-- DBSCAN-кластеризация')
 
         # получение списка номеров кластеров и их размеров
         uniq_labels, label_count = np.unique(dbscan_cluster.labels_, return_counts=True)
@@ -717,8 +735,10 @@ class FractalAnalysis:
 
         n_cluster = np.unique(filtered_labels).shape[0]
         distances_of_curves = (np.zeros(shape=n_cluster), np.zeros(shape=(n_cluster, 2, 2)))
+        distances_curves_vertical = (np.zeros(shape=n_cluster), np.zeros(shape=(n_cluster, 2, 2)))
         i_cluster = 0
 
+        print('-- LOWESS-регрессия')
         # проход по каждому кластеру
         for i in np.unique(filtered_labels):
             x = clustered_change_begin[filtered_labels == i, 0]
@@ -731,11 +751,13 @@ class FractalAnalysis:
             z2 = lowess(y2, x, frac=0.1)
 
             distances_of_curves[0][i_cluster] = FunctionsDistance.functions_distance(z1, z2)
+            distances_curves_vertical[0][i_cluster] = FunctionsDistance.functions_distance_vertical(z1, z2)
 
-            plt.plot(z1[:, 0], z1[:, 1], '--', c='blue', linewidth=3)
-            plt.plot(z2[:, 0], z2[:, 1], '--', c='blue', linewidth=3)
-            plt.annotate('{}'.format(distances_of_curves[0][i_cluster]), xy=(z1[0, 0], z1[0, 1]),
-                         xytext=(z1[0, 0], z1[0, 1]), arrowprops={'facecolor': 'white', 'shrink': 0.1})
+            if self._show_step:
+                plt.plot(z1[:, 0], z1[:, 1], '--', c='blue', linewidth=3)
+                plt.plot(z2[:, 0], z2[:, 1], '--', c='blue', linewidth=3)
+                plt.annotate('{}'.format(distances_of_curves[0][i_cluster]), xy=(z1[0, 0], z1[0, 1]),
+                             xytext=(z1[0, 0], z1[0, 1]), arrowprops={'facecolor': 'white', 'shrink': 0.1})
 
             # округляем точки до целых, чтобы поставить им в соответствие пиксели изображения
             points_beg = np.around(z1).astype(np.int32)
@@ -747,14 +769,19 @@ class FractalAnalysis:
             distances_of_curves[1][i_cluster, 0] = points_beg[0][0]
             distances_of_curves[1][i_cluster, 1] = points_end[0][0]
 
+            distances_curves_vertical[1][i_cluster, 0] = points_beg[0][0]
+            distances_curves_vertical[1][i_cluster, 1] = points_end[0][0]
+
             # рисуем на маске линии начала и конца изменения и закрашиваем область между ними
             cv.fillPoly(self._segments, [pts], 255)
 
             i_cluster += 1
 
-        plt.show()
+        if self._show_step:
+            plt.show()
 
         self.distances_curves = distances_of_curves
+        self.distances_curves_vertical = distances_curves_vertical
 
     def _segment_distribution(self, img, intensity):
         """
@@ -844,6 +871,9 @@ class FractalAnalysis:
 
         return result
 
+    def set_EMmodel(self, model):
+        self.EMmodel = model
+
     def _segment_min_distribution(self, n_comp):
         """
         Сегментация переходного слоя через EM-классификацию
@@ -854,10 +884,11 @@ class FractalAnalysis:
         """
         # классификация значений поля по EM-алгоритму с тремя компонентами в смеси
         X = np.expand_dims(self.field.flatten(), 1)
-        model = GaussianMixture(n_components=n_comp, covariance_type='full')
-        model.fit(X)
-        predict = model.predict(X)
-        means = model.means_
+        if self.EMmodel is None:
+            self.EMmodel = GaussianMixture(n_components=n_comp, covariance_type='full')
+            self.EMmodel.fit(X)
+        predict = self.EMmodel.predict(X)
+        means = self.EMmodel.means_
         field_predict = np.resize(predict, self.field.shape)
 
         # перевод поля значений классов в пространство оттенков серого
@@ -926,11 +957,14 @@ class FractalAnalysis:
         if n_comp == 2:
             # если количество компонент в смеси распределений - 2,
             # то сегментация проходит по сильным изменениям размерности
+            print('Метод запущен')
             self._segment_field_change()
+
         else:
             # если количество компонент в смеси распределений - 3,
             # то сегментация проходит по выделению областей,
             # принадлежащим распределению с минимальным математическим ожиданием
+            print('Метод запущен')
             self._segment_min_distribution(n_comp)
 
         return self._segments

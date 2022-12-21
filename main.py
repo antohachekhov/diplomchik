@@ -93,33 +93,47 @@ colors = {'0': '#BEF73E',
 
 
 def em_analysis(field):
+    chisquares = np.zeros(shape=4)
+    j = 0
     for comp in [2, 3, 4, 5]:
         X = np.expand_dims(field.flatten(), 1)
         model = GaussianMixture(n_components=comp, covariance_type='full')
         model.fit(X)
         mu = model.means_
         sigma = model.covariances_
-        print('Веса')
-        print(model.weights_)
-        print(mu)
-        print(sigma)
+        # print('Веса')
+        # print(model.weights_)
+        # print(mu)
+        # print(sigma)
 
         # вывод гистограммы распределений фрактальных размерностей в поле
-        plt.hist(fractal.field.flatten(), bins=250, facecolor=colors['0'], edgecolor='none', density=True)
+        # count - кол-во, bins - значение размерности
+        counts, bins, _ = plt.hist(fractal.field.flatten(), bins=250, facecolor=colors['0'], edgecolor='none', density=True)
+        np.savetxt(folder + '/' + 'counts' + '.csv', counts, delimiter=";", newline="\n")
+        np.savetxt(folder + '/' + 'bins' + '.csv', bins, delimiter=";", newline="\n")
         plt.title('Кластеризация EM-алгоритмом по ' + str(comp) + ' распределениям')
         # for i in range(comp):
         #     xi = np.linspace(mu[i][0] - 5 * math.sqrt(sigma[i][0][0]), mu[i][0] + 5 * math.sqrt(sigma[i][0][0]), 100)
         #     plt.plot(xi, stats.norm.pdf(xi, mu[i][0], math.sqrt(sigma[i][0][0])),
         #              label=rf'$\mu_{i}={mu[i][0]:.6f}, \sigma_{i}$={sigma[i][0][0]:.6f}', linewidth=2)
-        xi = np.linspace(2, 4, 2000)
-        res = np.zeros(xi.shape)
+
+        # xi = np.linspace(np.min(bins), np.max(bins), bins.shape[0])
+        x = (bins[1:] + bins[:-1]) / 2.
+        res = np.zeros(x.shape)
         for i in range(comp):
-            res += model.weights_[i] * stats.norm.pdf(xi, mu[i][0], math.sqrt(sigma[i][0][0]))
-        plt.plot(xi, res, color='red')
+            res += model.weights_[i] * stats.norm.pdf(x, mu[i][0], math.sqrt(sigma[i][0][0]))
+        plt.plot(x, res, color='red')
         plt.tight_layout()
         plt.legend()
         plt.grid(True)
         plt.show()
+
+        chi, p = stats.chisquare(res, f_exp=counts)
+        print('Значение для n_comp = {} Хи-квадрат = {}, p = {}'.format(comp, chi, p))
+        chisquares[j] = chi
+        j += 1
+
+    print(chisquares)
 
 
 def noise(img_gray, lower, upper, plot=False):
@@ -464,12 +478,12 @@ ax.set_title('Distribution of fractal dimensions')
 plt.tight_layout()
 plt.show()
 
-"""
+
 print('EM analysis? 1 - Yes, 0 - No\n')
 eman = int(input())
 if eman:
     em_analysis(fractal.field)
-"""
+
 
 print('Exit - 0, or\nEnter number components in a mixture of distributions - ', end='')
 n_comp = int(input())
@@ -512,11 +526,17 @@ if n_comp != 0:
 
     if n_comp == 2:
         distances, coor = fractal.distances_curves
-        mean_d = np.mean(distances)
-        print("Средняя ширина переходного слоя: {:e}".format(mean_d * coef_scale))
+        distances2, coor2 = fractal.distances_curves_vertical
+        mean_d_1 = np.mean(distances)
+        mean_d_2 = np.mean(distances2)
+        print("Средняя ширина переходного слоя по первому методу: {:e}".format(mean_d_1 * coef_scale))
+        print("Средняя ширина переходного слоя по второму методу: {:e}".format(mean_d_2 * coef_scale))
         for i, d in enumerate(distances):
             plt.text(coor[i, 0, 0], coor[i, 0, 1], "{:e}".format(d * coef_scale),
                      bbox=dict(boxstyle="round,pad=0.3", fc="#d69f67", ec="black", lw=1))
+        for i, d in enumerate(distances2):
+            plt.text(coor2[i, 1, 0], coor2[i, 1, 1], "{:e}".format(d * coef_scale),
+                     bbox=dict(boxstyle="round,pad=0.3", fc="#674D92", ec="white", lw=1))
 
     plt.show()
 
