@@ -5,22 +5,18 @@ import os
 from tkinter import *
 from tkinter import filedialog
 from tkinter.filedialog import askopenfilename
-import tkinter.messagebox as mb
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.ticker as ticker
-from scipy.signal import medfilt
 import matplotlib.pyplot as plt
 import cv2 as cv
 from FractalAnalysisClass import FractalAnalysis
 import tkinter.messagebox as mb
-from math import sin
 from sklearn.mixture import GaussianMixture
 import scipy.stats as stats
 import math
 import matplotlib.lines as lns
 from functools import partial
-import scipy.special as special
 
 
 class ScaleEdit(Toplevel):
@@ -61,7 +57,7 @@ class ScaleEdit(Toplevel):
         size = int(self.size.get())
         return size
 
-    def close(self, event):
+    def close(self):
         self.destroy()
 
 
@@ -76,7 +72,6 @@ class Filter(Toplevel):
         self.bottom_level = StringVar()
         self.top_level = StringVar()
 
-        # Toplevel.iconbitmap(self, default="clienticon.ico")
         f = Figure(figsize=(1, 2), dpi=100)
         a = f.add_subplot(111)
         a.hist(img.ravel(), 256, [0, 256])
@@ -462,7 +457,7 @@ class App(Tk):
         self.start_analysis_button.pack(pady=10)
 
         self.setparam_button = Button(self.top_right, text="Установить параметры", width=20, height=1,
-                                      command=self.setparam)
+                                      command=self.setParam)
         self.setparam_button.pack(pady=5)
         self.clear_button = Button(self.top_right, text="Очистить данные", width=20, height=1, command=self.clear)
         self.clear_button.pack(pady=5)
@@ -473,7 +468,7 @@ class App(Tk):
         plt.close()
         self.destroy()
 
-    def setparam(self):
+    def setParam(self):
         param_win = Parameters(self)
         param_win.wait_window()
         self.fractal.set_param(self.param[0], self.param[1], self.param[2])
@@ -505,8 +500,8 @@ class App(Tk):
                 save.wait_window()
             else:
                 self.fractal.set_field(self.img, self.winsize.get(), self.dx.get(), self.dy.get(), field=self.field)
-            #em = EMAnalysisWindow(self)
-            #self.comp = em.get_comp()
+            # em = EMAnalysisWindow(self)
+            # self.comp = em.get_comp()
             self.EMcompare()
             print('Выбран метод для {} распределений'.format(self.comp))
             if self.comp in [2, 3]:
@@ -514,8 +509,8 @@ class App(Tk):
                     self.fractal.set_EMmodel(self.model)
                 mask_stratum = self.fractal.segment_stratum(self.comp)
 
-                #plt.imshow(cv.cvtColor(mask_stratum, cv.COLOR_GRAY2RGB))
-                #plt.show()
+                # plt.imshow(cv.cvtColor(mask_stratum, cv.COLOR_GRAY2RGB))
+                # plt.show()
 
                 img = cv.cvtColor(self.img, cv.COLOR_BGR2RGB)
                 # создание слоя-заливки
@@ -566,9 +561,9 @@ class App(Tk):
         chi1 = 0.
         chi2 = 0.
         for comp in [2, 3]:
-            X = np.expand_dims(self.field.flatten(), 1)
+            field_array = np.expand_dims(self.field.flatten(), 1)
             model = GaussianMixture(n_components=comp, covariance_type='full')
-            model.fit(X)
+            model.fit(field_array)
             mu = model.means_
             sigma = model.covariances_
             if comp == 3:
@@ -601,11 +596,14 @@ class App(Tk):
             self.input_field_button['state'] = NORMAL
 
     def input_field(self):
-        if False:
-            uploadfilename = tests[nametest]['field']
-            win_size = tests[nametest]['win_size']
-            dx = tests[nametest]['dx']
-            dy = tests[nametest]['dy']
+        Test = False
+        if Test:
+            print('Error')
+            uploadfilename = None
+            # uploadfilename = tests[nametest]['field']
+            # win_size = tests[nametest]['win_size']
+            # dx = tests[nametest]['dx']
+            # dy = tests[nametest]['dy']
         else:
             # чтение фрактального поля из файла
             Tk().withdraw()
@@ -644,9 +642,12 @@ class App(Tk):
     def input_image(self):
         image_uploaded = False
         while not image_uploaded:
+            Test = False
             # получение имени файла и пути к нему
-            if False:
-                image_name = tests[nametest]['image']
+            if Test:
+                # image_name = tests[nametest]['image']
+                print('Error')
+                image_name = '.'
             else:
                 Tk().withdraw()
                 image_name = askopenfilename()
@@ -727,13 +728,11 @@ class App(Tk):
         """
         Функция избавляется от шумов на изображении (чёрные или белые пятна)
 
-        :param img_gray: 3-D numpy массив.
-            Изображение в цветовом пространстве оттенков серого.
-        :param lower: int
+        :param lower: Int
             Нижний предел допустимой (не шумовой) интенсивности цвета.
-        :param upper: int
+        :param upper: Int
             Верхний предел допустимой (не шумовой) интенсивности цвета.
-        :param plot: bool.
+        :param plot: Bool.
             True, если необходимо вывести пошаговую обработку изображения.
             False, если это не нужно.
 

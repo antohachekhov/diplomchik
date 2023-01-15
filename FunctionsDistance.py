@@ -126,7 +126,7 @@ def intersection_line_curve(k_line, z_line, curve, eps=1e-7):
     return p
 
 
-def functions_distance(curve1, curve2, eps=1e-7, n_diff=3):
+def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
     """
     Вычисление расстояния между кривыми с помощью построения нормалей
 

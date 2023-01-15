@@ -12,6 +12,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
 from statsmodels.nonparametric.api import lowess
 
+
 # from finta import TA
 
 
@@ -467,8 +468,8 @@ class FractalAnalysis:
         else:
             self._method_prism()
 
-    def set_param(self, minsamples, min_transition, median_kernel):
-        self._min_samples = minsamples
+    def set_param(self, min_samples, min_transition, median_kernel):
+        self._min_samples = min_samples
         self._min_transition = min_transition
         self._median_kernel = median_kernel
 
@@ -584,22 +585,21 @@ class FractalAnalysis:
         change_begin = np.array([0, 0], dtype=np.uint32)
         change_end = np.array([0, 0], dtype=np.uint32)
 
-
+        """
         # Для исследований!
 
-        #print('Show filter? 1 - Yes, 0 - No')
+        # print('Show filter? 1 - Yes, 0 - No')
         sf = 0
-        #sf = int(input())
-        sfcol = -1
+        # sf = int(input())
+        sf-col = -1
         if sf:
             print('Choose column or write -1  ', end='')
             plt.imshow(cv.cvtColor(self._img[int(self._win_size / 2): -int(self._win_size / 2) + 1,
                                    int(self._win_size / 2): -int(self._win_size / 2) + 1], cv.COLOR_GRAY2RGB))
             plt.xticks(np.arange(0, self._img.shape[1] - self._win_size, 50))
             plt.show()
-            sfcol = int(input())
-
-
+            sf-col = int(input())
+        """
 
         # проход по каждому столбцу в поле
         for n, column in enumerate(self.field.T):  # range(self.field.shape[1]):
@@ -607,7 +607,6 @@ class FractalAnalysis:
 
             # медианная оценка выборки
             filter_column = medfilt(column, kernel_size=self._median_kernel)
-            # filter_column = lowess(column, np.arange(0, self._img.shape[0] - self._win_size + 1, 1), frac=0.1)[:, 1]
 
             # координаты локальных экстремумов и разность значений между ними
             amplMF, extrMF = self._find_extr(filter_column)
@@ -629,7 +628,6 @@ class FractalAnalysis:
                 plt.show()
                 plt.close()
             """
-
 
             # Выделение областей, в которых разность между экстремумами больше,
             # чем величина изменения фрактальной размерности на границе двух текстур
@@ -750,7 +748,7 @@ class FractalAnalysis:
             # строится регрессионная модель для точек, соответствующих концу переходного изменения поля
             z2 = lowess(y2, x, frac=0.1)
 
-            distances_of_curves[0][i_cluster] = FunctionsDistance.functions_distance(z1, z2)
+            distances_of_curves[0][i_cluster] = FunctionsDistance.functions_distance_normal(z1, z2)
             distances_curves_vertical[0][i_cluster] = FunctionsDistance.functions_distance_vertical(z1, z2)
 
             if self._show_step:
@@ -911,7 +909,7 @@ class FractalAnalysis:
                                           self._img.shape[1] - self._win_size + 1)),
                                  fx=self._dx, fy=self._dy, interpolation=cv.INTER_LINEAR_EXACT)
         self._segments[int(self._win_size / 2): -int(self._win_size / 2) + 1,
-        int(self._win_size / 2): -int(self._win_size / 2) + 1] = mask_stratum
+                       int(self._win_size / 2): -int(self._win_size / 2) + 1] = mask_stratum
 
     def segment_stratum(self,
                         n_comp,
@@ -923,10 +921,10 @@ class FractalAnalysis:
         """
         Функция для выделения переходного слоя на изображении
 
-        :param n_comp: int
+        :param n_comp: Int
             Количество компонент в смеси распределений фрактальных размерностей.
 
-        :param median_kernel: int, по умолчанию = None
+        :param median_kernel: Int, по умолчанию = None
             Ширина медианного фильтра, введённая пользователем
 
         :param min_transition: float, по умолчанию = None
