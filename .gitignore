@@ -2,3 +2,7 @@
 /dist/
 /analysis/
 /kneed/
+/scipy/
+/image/
+tests.spec
+modified_img.jpg
