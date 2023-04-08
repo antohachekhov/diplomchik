@@ -57,7 +57,7 @@ class ScaleEdit(Toplevel):
         size = int(self.size.get())
         return size
 
-    def close(self):
+    def close(self, command):
         self.destroy()
 
 
@@ -370,7 +370,7 @@ class App(Tk):
         self.winsize = IntVar()
         self.dx = IntVar()
         self.dy = IntVar()
-        self.fractal = FractalAnalysis(show_step=False)
+        self.fractal = FractalAnalysis(show_step=True)
         self.comp = 0
         self.param = [0, 0., 0]
         self.model = None
@@ -500,8 +500,8 @@ class App(Tk):
                 save.wait_window()
             else:
                 self.fractal.set_field(self.img, self.winsize.get(), self.dx.get(), self.dy.get(), field=self.field)
-            # em = EMAnalysisWindow(self)
-            # self.comp = em.get_comp()
+            em = EMAnalysisWindow(self)
+            self.comp = em.get_comp()
             self.EMcompare()
             print('Выбран метод для {} распределений'.format(self.comp))
             if self.comp in [2, 3]:
@@ -509,8 +509,9 @@ class App(Tk):
                     self.fractal.set_EMmodel(self.model)
                 mask_stratum = self.fractal.segment_stratum(self.comp)
 
-                # plt.imshow(cv.cvtColor(mask_stratum, cv.COLOR_GRAY2RGB))
-                # plt.show()
+                # показать маску
+                plt.imshow(cv.cvtColor(mask_stratum, cv.COLOR_GRAY2RGB))
+                plt.show()
 
                 img = cv.cvtColor(self.img, cv.COLOR_BGR2RGB)
                 # создание слоя-заливки
@@ -525,7 +526,8 @@ class App(Tk):
                 result = cv.addWeighted(img, 1, stratum, 0.2, 0.0)
 
                 # выделение контуров сегментов
-                color_contours = (0, 0, 255) if self.comp == 2 else (102, 0, 153)
+                # color_contours = (0, 0, 255) if self.comp == 2 else (102, 0, 153)
+                color_contours = (0, 255, 255)
                 contours, hierarchy = cv.findContours(mask_stratum, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
                 cv.drawContours(result, contours, -1, color_contours, 1, cv.LINE_AA, hierarchy, 3)
 
@@ -533,26 +535,45 @@ class App(Tk):
                 result = cv.cvtColor(result, cv.COLOR_BGR2RGB)
 
                 color_square = (1, 0, 0) if self.comp == 2 else (0.4, 0, 0.6)
-                plt.figure(figsize=(13, 7))
-                plt.imshow(result)
+
+                figImage, axisImage = plt.subplots(1, 1)
+                axisImage.imshow(result)
+                # plt.figure(figsize=(13, 7))
+                # plt.imshow(result)
                 purple_square = lns.Line2D([], [], color=color_square, marker='s', linestyle='None',
                                            markersize=7, label='Переходный слой')
-                plt.legend(handles=[purple_square])
+                axisImage.legend(handles=[purple_square])
 
+                """
                 if self.comp == 2:
                     distances, coor = self.fractal.distances_curves
-                    distances2, coor2 = self.fractal.distances_curves_vertical
-                    mean_d_1 = np.mean(distances)
-                    mean_d_2 = np.mean(distances2)
-                    print("Средняя ширина переходного слоя по первому методу: {:e}".format(mean_d_1 * self.ScaleCoef))
-                    print("Средняя ширина переходного слоя по второму методу: {:e}".format(mean_d_2 * self.ScaleCoef))
-                    for i, d in enumerate(distances):
-                        plt.text(coor[i, 0, 0], coor[i, 0, 1], "{:e}".format(d * self.ScaleCoef),
-                                 bbox=dict(boxstyle="round,pad=0.3", fc="#d69f67", ec="black", lw=1))
-                    for i, d in enumerate(distances2):
-                        plt.text(coor2[i, 1, 0], coor2[i, 1, 1], "{:e}".format(d * self.ScaleCoef),
-                                 bbox=dict(boxstyle="round,pad=0.3", fc="#674D92", ec="white", lw=1))
+                    # distances2, coor2 = self.fractal.distances_curves_vertical
 
+                    labels = list(map(chr, range(97, 97 + distances.shape[0])))
+
+                    mean_d_1 = np.mean(distances)
+                    # mean_d_2 = np.mean(distances2)
+                    print("Средняя ширина переходного слоя по первому методу: {:e}".format(mean_d_1 * self.ScaleCoef))
+                    # print("Средняя ширина переходного слоя по второму методу: {:e}".format(mean_d_2 * self.ScaleCoef))
+                    #for i, d in enumerate(distances):
+                    #    axisImage.text(coor[i, 0, 0], coor[i, 0, 1] - 40, "Область {}\n{:e}".format(labels[i], d * self.ScaleCoef),
+                    #             bbox=dict(boxstyle="round,pad=0.3", fc="#d69f67", ec="black", lw=1), fontsize=8)
+                    # for i, d in enumerate(distances2):
+                    #     plt.text(coor2[i, 1, 0], coor2[i, 1, 1], "{:e}".format(d * self.ScaleCoef),
+                    #              bbox=dict(boxstyle="round,pad=0.3", fc="#674D92", ec="white", lw=1))
+
+                    listDistances = self.fractal.listDistancesInEveryPoint
+                    for i, i_list in enumerate(listDistances):
+                        np.savetxt('listDistances_{}.txt'.format(i), i_list)
+                    
+                    figBar, axisBar = plt.subplots(len(listDistances))
+                    for i, ax in enumerate(axisBar):
+                        ax.hist(listDistances[i] * self.ScaleCoef, bins=15, facecolor="#BEF73E", edgecolor='none')
+                        # ax.bar(range(0, listDistances[i].shape[0]), listDistances[i] * self.ScaleCoef)
+                        ax.set_title("Область {}".format(labels[i]))
+                        ax.grid(axis='y')
+                        # ax.get_xaxis().set_visible(False)
+                """
                 plt.show()
         else:
             mb.showerror("Ошибка", 'Введены не все данные!')
@@ -806,7 +827,6 @@ class App(Tk):
             plt.title('Median_masked')
             plt.xticks([])
             plt.yticks([])
-
             plt.subplot(2, 3, 6)
             plt.imshow(result, cmap='gray')
             plt.title('Result')
@@ -820,789 +840,3 @@ class App(Tk):
 
 app = App()
 app.mainloop()
-
-"""
-def _count(a, axis=None):
-    if hasattr(a, 'count'):
-        num = a.count(axis=axis)
-        if isinstance(num, np.ndarray) and num.ndim == 0:
-            # In some cases, the `count` method returns a scalar array (e.g.
-            # np.array(3)), but we want a plain integer.
-            num = int(num)
-    else:
-        if axis is None:
-            num = a.size
-        else:
-            num = a.shape[axis]
-    return num
-
-def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=1):
-    f_obs = np.asanyarray(f_obs)
-
-    if f_exp is not None:
-        f_exp = np.asanyarray(f_exp)
-    else:
-        # Ignore 'invalid' errors so the edge case of a data set with length 0
-        # is handled without spurious warnings.
-        with np.errstate(invalid='ignore'):
-            f_exp = f_obs.mean(axis=axis, keepdims=True)
-
-    # `terms` is the array of terms that are summed along `axis` to create
-    # the test statistic.  We use some specialized code for a few special
-    # cases of lambda_.
-    if lambda_ == 1:
-        # Pearson's chi-squared statistic
-        terms = (f_obs.astype(np.float64) - f_exp)**2 / f_exp
-    elif lambda_ == 0:
-        # Log-likelihood ratio (i.e. G-test)
-        terms = 2.0 * special.xlogy(f_obs, f_obs / f_exp)
-    elif lambda_ == -1:
-        # Modified log-likelihood ratio
-        terms = 2.0 * special.xlogy(f_exp, f_exp / f_obs)
-    else:
-        # General Cressie-Read power divergence.
-        terms = f_obs * ((f_obs / f_exp)**lambda_ - 1)
-        terms /= 0.5 * lambda_ * (lambda_ + 1)
-
-    stat = terms.sum(axis=axis)
-
-    num_obs = _count(terms, axis=axis)
-    ddof = np.asarray(ddof)
-    p = stats.distributions.chi2.sf(stat, num_obs - 1 - ddof)
-
-    return stat, p
-
-def chi2(a1, a2):
-    sum = np.sum(np.power(a1 / a1.shape[0] - a2 / a2.shape[0], 2) / (a1 + a2))
-    chi = a1.shape[0] * a2.shape[0] * sum
-    # sum = np.sum(np.power(a1 - a2, 2) / (a1 + a2))
-    # chi = sum
-    return chi
-
-comp = 3
-for comp in [2, 3]:
-    field = np.loadtxt(r"C:\\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\20min1_dx1dy1w30.csv",
-                       delimiter=";")
-    X = np.expand_dims(field.flatten(), 1)
-    model = GaussianMixture(n_components=comp, covariance_type='full')
-    model.fit(X)
-    mu = model.means_
-    sigma = model.covariances_
-
-    counts, bins, o = plt.hist(field.flatten(), bins=50, facecolor="#BEF73E", edgecolor='none', density=True)
-    # counts = np.loadtxt(r"C:\\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\counts.csv", delimiter=";")
-    # bins = np.loadtxt(r"C:\\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\bins.csv", delimiter=";")
-    plt.title('Кластеризация EM-алгоритмом по ' + str(comp) + ' распределениям')
-    # for i in range(comp):
-    #     xi = np.linspace(mu[i][0] - 5 * math.sqrt(sigma[i][0][0]), mu[i][0] + 5 * math.sqrt(sigma[i][0][0]), 100)
-    #     plt.plot(xi, stats.norm.pdf(xi, mu[i][0], math.sqrt(sigma[i][0][0])),
-    #              label=rf'$\mu_{i}={mu[i][0]:.6f}, \sigma_{i}$={sigma[i][0][0]:.6f}', linewidth=2)
-
-    # xi = np.linspace(np.min(bins), np.max(bins), bins.shape[0])
-    x = (bins[1:] + bins[:-1]) / 2.
-    res = np.zeros(x.shape)
-    for i in range(comp):
-        res += model.weights_[i] * stats.norm.pdf(x, mu[i][0], math.sqrt(sigma[i][0][0]))
-
-    np.savetxt(r"C:\\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\res{}.csv".format(comp), res, delimiter=";")
-    np.savetxt(r"C:\\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\count{}.csv".format(comp), counts,
-               delimiter=";")
-    plt.plot(x, res, color='red', label='res')
-    plt.plot(x, counts, color='green', label='counts')
-    plt.tight_layout()
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-    chi, p = stats.chisquare(res, f_exp=counts)
-    chisq = chi2(res, counts)
-    print('Значение для n_comp = {} Хи-квадрат = {}, p = {}'.format(comp, chi, p))
-    print('Значение для n_comp = {} Хи-квадрат = {}'.format(comp, chisq))
-
-
-
-np.random.seed(58008)
-
-
-def normalise(func):
-    o = []
-    for p in func:
-        res = median(p)
-        res = easy_mean(res)
-        o.append(res)
-    return o
-
-
-def noised(func, k=0.3, fitob=0.03):
-    o = []
-    for p in func:
-        r = (np.random.random()*2-1) * k
-
-        # Standard noise and random emissions
-        if np.random.random() < fitob: c = p + r*7
-        else: c = p + r
-
-        o.append(c)
-    return o
-
-
-def arith_mean(f, buffer_size=10):
-    # Creating buffer
-    if not hasattr(arith_mean, "buffer"):
-        arith_mean.buffer = [f] * buffer_size
-
-    # Move buffer to actually values ( [0, 1, 2, 3] -> [1, 2, 3, 4] )
-    arith_mean.buffer = arith_mean.buffer[1:]
-    arith_mean.buffer.append(f)
-
-    # Calculation arithmetic mean
-    mean = 0
-    for e in arith_mean.buffer: mean += e
-    mean /= len(arith_mean.buffer)
-
-    return mean
-
-
-def easy_mean(f, s_k=0.2, max_k=0.8, d=0.5):
-    # Creating static variable
-    if not hasattr(easy_mean, "fit"):
-        easy_mean.fit = f
-
-    # Adaptive ratio
-    k = s_k if (abs(f - easy_mean.fit) < d) else max_k
-
-    # Calculation easy mean
-    easy_mean.fit += (f - easy_mean.fit) * k
-
-    return easy_mean.fit
-
-
-def median(f):
-    # Creating buffer
-    if not hasattr(median, "buffer"):
-        median.buffer = [f] * 3
-
-    # Move buffer to actually values ( [0, 1, 2] -> [1, 2, 3] )
-    median.buffer = median.buffer[1:]
-    median.buffer.append(f)
-
-    # Calculation median
-    a = median.buffer[0]
-    b = median.buffer[1]
-    c = median.buffer[2]
-    middle = max(a, c) if (max(a, b) == max(b, c)) else max(b, min(a, c))
-
-    return middle
-
-
-def kalman(f, q=0.25, r=0.7):
-    if not hasattr(kalman, "Accumulated_Error"):
-        kalman.Accumulated_Error = 1
-        kalman.kalman_adc_old = 0
-
-    if abs(f-kalman.kalman_adc_old)/50 > 0.25:
-        Old_Input = f*0.382 + kalman.kalman_adc_old*0.618
-    else:
-        Old_Input = kalman.kalman_adc_old
-
-    Old_Error_All = (kalman.Accumulated_Error**2 + q**2)**(1/2)
-    H = Old_Error_All**2/(Old_Error_All**2 + r**2)
-    kalman_adc = Old_Input + H * (f - Old_Input)
-    kalman.Accumulated_Error = ((1 - H)*Old_Error_All**2)**(1/2)
-    kalman.kalman_adc_old = kalman_adc
-
-    return kalman_adc
-
-column = np.loadtxt(r"C:\\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\column.csv", delimiter=",")
-median_column = medfilt(column, kernel_size=11)
-
-o = []
-for p in column:
-    res = easy_mean(p)
-    o.append(res)
-o_array = np.array(o)
-
-merge = []
-for p in median_column:
-    res = easy_mean(p)
-    merge.append(res)
-merge_array = np.array(merge)
-
-# merge = normalise(column)
-
-fig, ax = plt.subplots()
-
-ax.plot(column, label='orig')
-ax.plot(median_column, label='median')
-ax.plot(o_array, label='adaptive')
-ax.plot(merge_array, label='median+adaptive')
-ax.legend()
-plt.show()
-
-
-def easy_mean(f, s_k=0.2, max_k=0.9, d=0.4):
-    # Creating static variable
-    if not hasattr(easy_mean, "fit"):
-        easy_mean.fit = f
-
-    # Adaptive ratio
-    k = s_k if (abs(f - easy_mean.fit) < d) else max_k
-
-    # Calculation easy mean
-    easy_mean.fit += (f - easy_mean.fit) * k
-
-    return easy_mean.fit
-
-
-
-
-# вспомогательные флаги-переменные
-# flag_convert = False
-# flag_filter = False
-
-# field_uploaded = False
-
-# coef_scale = None  # коэффициент масштабирования метр/пиксель
-
-
-
-
-
-
-if Test:
-    tfi = tests[nametest]['filtered']
-else:
-    print('Clear the image from noise? 0 - Yes, 1 - No\n')
-    tfi = int(input())
-    # 1 - Шумы на изображении будут обработаны
-    # 0 - Изображение останется с шумами
-if not tfi:
-    # вывод гистограммы распределения интенсивности яркостей пикселей в изображении,
-    # по которой можно определить пороговые значения интенсивности
-    plt.hist(img.ravel(), 256, [0, 256])
-    plt.show()
-
-    # значения по умолчанию
-    up = 170
-    low = 30
-
-    print('Default parameters for noise (upper=170, lower=30)? 1 - Yes, 0 - No')
-    if int(input()) == 0:
-        print('Enter upper limit - ', end='')
-        up = int(input())
-        print('Enter lower limit - ', end='')
-        low = int(input())
-
-    # обработка изображения (удаление шумов)
-    img = noise(img, lower=low, upper=up, plot=True)
-
-    # перевод изображения в пространство оттенков серого
-    # img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    flag_filter = True
-
-    print('Save filtered image? 1 - Yes, 0 - No\n')
-    # 1 - Обработанное изображение будет сохранено
-    sfi = int(input())
-    if sfi == 1:
-        # сохранение обработанного изображение
-
-        filter_result_file = image_file.copy()
-        filter_result_file.paste(Image.fromarray(img))
-        filter_result_file.save(folder + '/ [Filtered] ' + filename + '.jpg')
-# else:
-# перевод изображения в пространство оттенков серого
-# img = cv.cvtColor(imgorig, cv.COLOR_BGR2GRAY)
-# img = imgorig
-
-# вывод загруженного/обработанного изображения
-plt.imshow(img, cmap='gray')
-
-if flag_filter:
-    plt.title("Input filtered image")
-else:
-    plt.title('Input image')
-plt.show()
-
-
-
-
-
-
-measurement_dict = {
-    "m": 1E-3,
-    "µ": 1E-6,
-    "n": 1E-9,
-}
-
-img_file = Image.open(r"")
-exif_data = img_file.getexif()
-
-tags = exif_data.items()._mapping[34118]
-
-width = 0.
-
-for row in tags.split("\r\n"):
-    key_value = row.split(" = ")
-    if len(key_value) == 2:
-        if key_value[0] == "Width":
-            width = key_value[1]
-            break
-
-print(width)
-
-width_str = width.split(" ")
-
-width_unit = width_str[1]
-width_value = float(width_str[0]) * measurement_dict[width_unit[0]]
-
-
-print(width_value, 'm')
-
-print('Done')
-
-
-
-
-def f_kas(fx0, dfx0, x0, x):
-    kas = x.copy()
-    kas -= x0
-    kas *= dfx0
-    kas += fx0
-    return kas
-
-
-def f_norm(fx0, dfx0, x0, x):
-    norm = x.copy()
-    norm -= x0
-    norm *= 1. / (dfx0)
-    norm = fx0 - norm
-    return norm
-
-
-class Line:
-
-    def __init__(self, a=1., b=1., c=0.):
-        self.a = a
-        self.b = b
-        self.c = c
-
-    def y(self, x):
-        return (self.a / self.b) * x + (self.c / self.b)
-
-    def general_equation(self, points):
-        if points.ndim == 1:
-            if points.shape[0] != 2:
-                raise ValueError('Number of features must be 2')
-            else:
-                return self.a * points[0] - self.b * points[1] + self.c
-        elif points.ndim == 2:
-            if points.shape[1] != 2:
-                raise ValueError('Number of features must be 2')
-            else:
-                return self.a * points[:, 0] - self.b * points[:, 1] + self.c
-        else:
-            raise ValueError('Points have incorrect dimension')
-
-
-def intersection_line_curve(k_line, z_line, curve, eps=1e-7):
-    if curve.shape[1] != 2:
-        raise ValueError('Number of features must be 2')
-
-    if k_line > 0:
-        # Right
-        sign_direction = 0
-        curve_direction = -1
-
-    else:  # k_line < 0
-        # Left
-        sign_direction = -1
-        curve_direction = 1
-
-    lineModel = Line(a=k_line, c=z_line)
-    eq = lineModel.general_equation(curve)
-    eq[np.abs(eq) < eps] = 0.
-    eq_sign = np.sign(eq)
-
-    if np.all(eq_sign == eq_sign[0]):
-        raise ValueError('Line and a curve do not intersect')
-
-    eq_signchange = ((np.roll(eq_sign, curve_direction) - eq_sign) != 0).astype(int)
-    change_index = np.where(eq_signchange == 1)[0]
-
-    if eq_sign[change_index[sign_direction]] == 0:
-        p = curve[change_index[sign_direction]]
-    else:
-        a = curve[change_index[sign_direction] - curve_direction]
-        b = curve[change_index[sign_direction]]
-
-        k_segment = (b[1] - a[1]) / (b[0] - a[0])
-        z_segment = (b[1] - a[1]) * (-a[0] / (b[0] - a[0]) + a[1] / (b[1] - a[1]))
-
-        p = np.array([(z_segment - z_line) / (k_line - k_segment),
-                      (k_line * z_segment - k_segment * z_line) / (k_line - k_segment)])
-
-    return p
-
-
-
-def functions_distance(curve1, curve2, eps=1e-7, n_diff=3):
-    if curve1.shape[0] < 2 or curve2.shape[0] < 2:
-        raise ValueError('Number of function points must be at least 2')
-    if curve1.shape[1] != 2 or curve2.shape[1] != 2:
-        raise ValueError('Number of features must be 2')
-
-    hx = np.mean(np.diff(curve1[:, 0]))
-    distance = 0.
-    n = 0
-    for (index,), x0 in np.ndenumerate(curve1[:, 0]):
-        if index < n_diff:
-            [dx, dy] = curve1[index + n_diff] - curve1[index]
-        elif index >= curve1.shape[0] - n_diff:
-            [dx, dy] = curve1[index] - curve1[index - n_diff]
-        else:
-            [dx, dy] = curve1[index + n_diff] - curve1[index - n_diff]
-
-        if math.fabs(dy) < eps:
-            print("In x = {} the normal is directed strictly vertically".format(x0))
-            difarray = np.abs(curve1[:, 0] - x0)
-            index = np.argmin(difarray)
-            if difarray[index] <= hx:
-                p = curve1[index]
-                distance += math.dist(curve1[index], p)
-                n += 1
-
-                continue
-        if math.fabs(dx) < eps:
-            print("In x = {} the normal is directed strictly horizontally".format(x0))
-            continue
-
-        k_norm = -1. / (dy / dx)
-        z_norm = curve1[index, 1] + x0 / (dy / dx)
-
-        if k_norm > 0:
-            # Right
-            x_min = x0
-            x_max = curve2[-1, 0]
-
-        else:  # k_line < 0
-            # Left
-            x_min = curve2[0, 0]
-            x_max = x0
-
-        curve2range = curve2[np.logical_and(x_min <= x, x_max >= x)]
-
-        try:
-            p = intersection_line_curve(k_norm, z_norm, curve2range)
-        except Exception:
-            continue
-        distance += math.dist(curve1[index], p)
-        n += 1
-
-    distance /= n
-    return distance
-
-
-# if index % 10 == 0:
-#     plt.plot(curve1[:, 0], curve1[:, 1])
-#     plt.plot(curve2[:, 0], curve2[:, 1])
-#     plt.plot([curve1[index, 0], p[0]], [curve1[index, 1], p[1]])
-#     plt.scatter(p[0], p[1])
-#     plt.scatter(curve1[index, 0], curve1[index, 1])
-#     plt.show()
-
-
-
-# x = -1.4181818
-# x0 = -6
-# normal = Line(a=-1./-1.2, c=3.6+x0/-1.2)
-# print(normal.y(x0))
-
-def myfunc(x):
-    y = x**2
-    return y
-
-
-error = False
-points = False
-inclination = False
-
-
-eps = 0.0000001
-h = 0.1
-x = np.arange(-7, 7 + h, h)
-f = np.vectorize(math.sin)
-# f = np.vectorize(myfunc)
-y1 = f(x)
-f2 = np.vectorize(math.sin)
-y2 = f2(x) + 5
-y1array = np.array([x, y1]).T
-y2array = np.array([x, y2]).T
-
-fig, ax = plt.subplots(1)
-ax.plot(y1array[:, 0], y1array[:, 1])
-ax.plot(y2array[:, 0], y2array[:, 1])
-ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
-ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
-ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-ax.grid(which='major')
-ax.grid(which='minor')
-plt.show()
-
-ind = 80
-x0 = x[ind]
-n = 3
-
-d = functions_distance(y1array, y2array)
-print(d)
-
-
-dy = y1[ind + n] - y1[ind - n]
-if math.fabs(dy) < eps:
-    # dy = 0.
-    # нормаль направленна вверх
-    difarray = np.abs(y2array[:, 0] - x0)
-    index = np.argmin(difarray)
-    if difarray[index] <= 2 * h:
-        p = y2array[index]
-        print(p)
-else:
-
-    inclination = True
-    left = False
-
-    dx = h * n * 2
-    dfx0 = dy / dx
-    fx0 = y1[ind]
-    # Method 1
-    k_norm = -1. / dfx0
-    z_norm = fx0 + x0 / dfx0
-    x_min = 0
-    x_max = 0
-
-    p = np.array([0, 0])
-
-    if k_norm > 0:
-        x_min = x0
-        x_max = y2array[-1, 0]
-        left = False
-
-    elif k_norm < 0:
-        x_min = y2array[0, 0]
-        x_max = x0
-        left = True
-
-    else:
-        print('zero')
-        error = True
-
-        # ДОБАВИТЬ ПОТОМ
-
-
-    if left:
-        sign_direction = -1
-        y_direction = 1
-    else:
-        sign_direction = 0
-        y_direction = -1
-
-    direction = -1 if left else 0
-
-    xrange = np.logical_and(x_min <= x, x_max >= x)
-    y2_in_range = y2array[xrange]
-
-    normalModel = Line(a=k_norm, c=z_norm)
-    eq = normalModel.kanon_eq_vector(y2_in_range)
-    eq[np.abs(eq) < eps] = 0.
-    eq_sign = np.sign(eq)
-
-    if np.all(eq_sign == eq_sign[0]):
-        print('Пересечения нет')
-        error = True
-    else:
-        eq_signchange = ((np.roll(eq_sign, y_direction) - eq_sign) != 0).astype(int)
-        change_index = np.where(eq_signchange == 1)[0]
-
-        if eq_sign[change_index[sign_direction]] == 0:
-            p = y2_in_range[change_index[sign_direction]]
-            print(p)
-        else:
-            a = y2_in_range[change_index[sign_direction] - y_direction]
-            b = y2_in_range[change_index[sign_direction]]
-            points = True
-
-            k_segment = (b[1] - a[1]) / (b[0] - a[0])
-            z_segment = (b[1] - a[1]) * (-a[0] / (b[0] - a[0]) + a[1] / (b[1] - a[1]))
-
-            px = (z_segment - z_norm) / (k_norm - k_segment)
-            py = (k_norm * z_segment - k_segment * z_norm) / (k_norm - k_segment)
-            p = np.array([px, py])
-
-            print(p)
-
-if not error:
-    fig, ax = plt.subplots(1)
-
-    if inclination:
-        y_min = np.amin(y2array[xrange, 1])
-        y_max = np.amax(y2array[xrange, 1])
-        normal = np.array([x[xrange], normalModel.y(x[xrange])]).T
-        ax.plot(y2_in_range[:, 0], y2_in_range[:, 1])
-        ax.plot(normal[:, 0], normal[:, 1])
-        ax.scatter(y2array[:, 0], y2array[:, 1], color='black', s=4)
-    else:
-        ax.plot(y2array[:, 0], y2array[:, 1])
-    #normalrange = np.logical_and(y_min - math.fabs(y_max - y_min) <= normal[:, 1], math.fabs(y_max - y_min) + y_max >= normal[:, 1])
-    #normal = normal[normalrange]
-
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
-    ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-    ax.grid(which='major')
-    ax.grid(which='minor')
-
-    ax.plot(x, y1)
-
-
-    if points:
-        ax.scatter(a[0], a[1])
-        ax.scatter(b[0], b[1])
-
-    ax.scatter(p[0], p[1])
-
-    plt.show()
-    # normal = np.array([x[xrange], normalModel.y(x[xrange])]).T
-    # normalrange = np.logical_and(y_min - math.fabs(y_max - y_min) <= normal[:, 1], math.fabs(y_max - y_min) + y_max >= normal[:, 1])
-    # normal = normal[normalrange]
-
-    # if True in np.logical_and(y_min <= normal[:, 1], y_max >= normal[:, 1]):
-
-    
-        nbrs = NearestNeighbors(n_neighbors=1,
-                                radius=0.1,
-                                algorithm='auto',
-                                metric='euclidean').fit(normal)
-
-        distances, _ = nbrs.kneighbors(y2_in_range)
-        # distances, indices = nbrs.kneighbors(y2_in_range)
-        a_idx = np.argmin(distances, axis=0)
-        a = y2_in_range[a_idx][0]
-        res = normalModel.kanon_eq(a)
-        
-
-        if res == 0:
-            p = a
-        else:
-            if res > 0:
-                y2_half_plane = y2_in_range[normalModel.kanon_eq_vector(y2_in_range) < 0]
-
-            else:
-                y2_half_plane = y2_in_range[normalModel.kanon_eq_vector(y2_in_range) > 0]
-
-            distances, _ = nbrs.kneighbors(y2_half_plane)
-            b_idx = np.argmin(distances, axis=0)
-            b = y2_half_plane[b_idx][0]
-
-            k_segment = (b[1] - a[1]) / (b[0] - a[0])
-            z_segment = (b[1] - a[1]) * (-a[0] / (b[0] - a[0]) + a[1] / (b[1] - a[1]))
-
-            px = (z_segment - z_norm) / (k_norm - k_segment)
-            py = (k_norm * z_segment - k_segment * z_norm) / (k_norm - k_segment)
-
-            #px = (a[1] - a[0] * (b[1] - a[1]) / (b[0] - a[0]) + fx0 + x0 / dfx0) / \
-            #     (-1./dfx0 - (b[1] - a[1]) / (b[0] - a[0]))
-
-            #py = ((b[1] - a[1]) / (b[0] - a[0]) * ((a[0] + x0) / dfx0 + fx0) - a[1] / dfx0) / \
-            #     (-1./dfx0 - (b[1] - a[1]) / (b[0] - a[0]))
-
-            p = np.array([px, py])
-
-            # if y2_half_plane.shape[0] == 0:
-                # бряк
-
-        ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
-        ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
-        ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-        ax.grid(which='major')
-        ax.grid(which='minor')
-
-        ax.plot(x, y1)
-        ax.plot(y2_in_range[:, 0], y2_in_range[:, 1])
-        ax.plot(normal[:, 0], normal[:, 1])
-
-        ax.scatter(a[0], a[1])
-        ax.scatter(b[0], b[1])
-        ax.scatter(p[0], p[1])
-        ax.scatter(y2array[:, 0], y2array[:, 1], color='black', s=4)
-
-        plt.show()
-
-
-# else:
-
-norm_eq = Line(a=-1. / dfx0, c=fx0 + x0 / dfx0)
-norm_vector = norm_eq.y(x)
-
-kas = f_kas(fx0, dfx0, x0, x)
-norm = f_norm(fx0, dfx0, x0, x)
-
-print('kas-k = ', dfx0)
-print('norm-k = ', -1. / dfx0)
-print('kas-k - norm-k = ', dfx0 + 1. / dfx0)
-print('kas-k * norm-k = ', dfx0 * (-1. / dfx0))
-print('tg(gamma) = ', (dfx0 + 1. / dfx0) / (1 + dfx0 * (-1. / dfx0)))
-print('gamma', math.atan((dfx0 + 1. / dfx0) / (1 + dfx0 * (-1. / dfx0))))
-print('gamma in degrees = ', math.degrees(math.atan((dfx0 + 1. / dfx0) / (1 + dfx0 * (-1. / dfx0)))))
-
-points_n = np.array([x, norm]).T
-
-n_neighbors = 1  # сколько ближайших соседей хотим найти
-nbrs = NearestNeighbors(n_neighbors=n_neighbors,
-                        radius=0.1,
-                        algorithm='auto',
-                        metric='euclidean').fit(points_n)
-
-points_y2 = np.array([x, y2]).T
-
-distances, indices = nbrs.kneighbors(points_y2)
-a_idx = np.argmin(distances, axis=0)
-p = points_n[indices[a_idx][0][0]]
-
-#
-#for i, idx in enumerate(a_idx):
-#    distance = distances[idx][i]
-#    p1 = points_n[indices[idx][i]]
-#    p2 = points_y2[idx]
-#    print("Наименьшее расстояние между точками {} и {}, расстояние равно {}".format(p1, p2, distance))
-#    ax.scatter(p1[0], p1[1])
-#    ax.scatter(p2[0], p2[1])
-
-
-ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
-ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
-ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-ax.grid()
-
-ax.plot(x, y1)
-ax.plot(x, y2)
-ax.plot(x, kas)
-ax.plot(x, norm)
-ax.scatter(p[0], p[1])
-ax.scatter(x[ind], y1[ind])
-
-print('distance = ', math.sqrt((p[0] - x[ind]) ** 2 + (p[1] - y1[ind]) ** 2))
-
-'''
-unit = 0.5
-x_tick = np.arange(-0.1, 0.1+unit, unit)
-x_label = [r"$-\frac{\pi}{2}$", r"$-\frac{\pi}{4}$", r"$0$", r"$+\frac{\pi}{4}$",   r"$+\frac{\pi}{2}$"]
-ax.set_xticks(x_tick*np.pi)
-ax.set_xticklabels(x_label, fontsize=12)
-'''
-
-plt.show()
-
-"""

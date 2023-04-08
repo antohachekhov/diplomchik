@@ -139,6 +139,8 @@ def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
     :param n_diff: int, по умолчанию = 1е-7
         Шаг дифференцирования
     """
+    distanceList = np.empty(shape=0)
+
     if curve1.shape[0] < 2 or curve2.shape[0] < 2:
         # Одна из кривых задана одной единственной точкой
         raise ValueError('Number of function points must be at least 2')
@@ -149,9 +151,9 @@ def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
     # Средний шаг по сетке для кривой-1
     hx = np.mean(np.diff(curve1[:, 0]))
     # Переменная для вычисления среднего расстояния между кривыми
-    distance = 0.
+    # distance = 0.
     # Количество найденных точек пересечения
-    n = 0
+    # n = 0
     # Вычисление расстояния для каждой точки кривой-1
     for (index,), x0 in np.ndenumerate(curve1[:, 0]):
         if index < n_diff:
@@ -166,17 +168,17 @@ def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
 
         if fabs(dy) < eps:
             # Если производная равно 0, то нормаль направлена строго вверх
-            print("In x = {} the normal is directed strictly vertically".format(x0))
+            # print("In x = {} the normal is directed strictly vertically".format(x0))
             # Нахождение точки в кривой-2 максимально близкой к координате x при которой построена нормаль
             difarray = np.abs(curve2[:, 0] - x0)
             index = np.argmin(difarray)
             if difarray[index] <= hx:
-                p = curve2[index]
-                distance += dist(curve2[index], p)
-                n += 1
+                d = dist(curve1[index], curve2[index])
+                distanceList = np.append(distanceList, [d], axis=0)
+                # n += 1
                 continue
         if fabs(dx) < eps:
-            # Если проивзодная стремится к бесконечности, то решения нет
+            # Если производная стремится к бесконечности, то решения нет
             print("In x = {} the normal is directed strictly horizontally".format(x0))
             continue
 
@@ -204,12 +206,15 @@ def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
         except Exception:
             continue
         # Находим расстояние между точками пересечения и основания нормали
-        distance += dist(curve1[index], p)
-        n += 1
+        d = dist(curve1[index], p)
+        # distance += d # НАДО БУДЕТ СДЕЛАТЬ ЧТОБЫ ФУНКЦИЯ ВОЗВРАЩАЛА НЕ ОБЩЕЕ РАССТОЯНИЕ А В КАЖДОЙ ТОЧКЕ
+        distanceList = np.append(distanceList, [d], axis=0)
+        # n += 1
 
     # Находим среднее расстояние
-    distance /= n
-    return distance
+    #distance /= n
+    #return distance, distanceList
+    return distanceList
 
 
 def functions_distance_vertical(curve1, curve2):

@@ -91,6 +91,7 @@ class FractalAnalysis:
         self._segments = None
         self.field = None
         self.distances_curves = None
+        self.listDistancesInEveryPoint = None
         self.distances_curves_vertical = None
         self.EMmodel = None
 
@@ -737,6 +738,8 @@ class FractalAnalysis:
         i_cluster = 0
 
         print('-- LOWESS-регрессия')
+
+        self.listDistancesInEveryPoint = []
         # проход по каждому кластеру
         for i in np.unique(filtered_labels):
             x = clustered_change_begin[filtered_labels == i, 0]
@@ -748,8 +751,12 @@ class FractalAnalysis:
             # строится регрессионная модель для точек, соответствующих концу переходного изменения поля
             z2 = lowess(y2, x, frac=0.1)
 
-            distances_of_curves[0][i_cluster] = FunctionsDistance.functions_distance_normal(z1, z2)
-            distances_curves_vertical[0][i_cluster] = FunctionsDistance.functions_distance_vertical(z1, z2)
+            # distances_of_curves[0][i_cluster], dInPoints = FunctionsDistance.functions_distance_normal(z1, z2)
+            dInPoints = FunctionsDistance.functions_distance_normal(z1, z2)
+            distances_of_curves[0][i_cluster] = np.mean(dInPoints)
+            # distances_curves_vertical[0][i_cluster] = FunctionsDistance.functions_distance_vertical(z1, z2)
+
+            self.listDistancesInEveryPoint.append(dInPoints) # добавить массив расстояний в каждой точки кривой в список массивов
 
             if self._show_step:
                 plt.plot(z1[:, 0], z1[:, 1], '--', c='blue', linewidth=3)
@@ -767,8 +774,8 @@ class FractalAnalysis:
             distances_of_curves[1][i_cluster, 0] = points_beg[0][0]
             distances_of_curves[1][i_cluster, 1] = points_end[0][0]
 
-            distances_curves_vertical[1][i_cluster, 0] = points_beg[0][0]
-            distances_curves_vertical[1][i_cluster, 1] = points_end[0][0]
+            # distances_curves_vertical[1][i_cluster, 0] = points_beg[0][0]
+            # distances_curves_vertical[1][i_cluster, 1] = points_end[0][0]
 
             # рисуем на маске линии начала и конца изменения и закрашиваем область между ними
             cv.fillPoly(self._segments, [pts], 255)
