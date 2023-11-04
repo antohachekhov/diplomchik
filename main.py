@@ -14,7 +14,7 @@ from FractalAnalysisClass import FractalAnalysis
 from sklearn.mixture import GaussianMixture
 import scipy.stats as stats
 
-Test = True
+Test = False
 
 nametest = '5min_1'
 
@@ -93,9 +93,17 @@ colors = {'0': '#BEF73E',
 
 
 def em_analysis(field):
-    chisquares = np.zeros(shape=4)
-    j = 0
-    for comp in [2, 3, 4, 5]:
+    chisquares = []
+    results = []
+    xForResults = []
+
+    fig, ax = plt.subplots()
+
+    # вывод гистограммы распределений фрактальных размерностей в поле
+    # count - кол-во, bins - значение размерности
+    counts, bins, _ = ax.hist(fractal.field.flatten(), bins=250, facecolor=colors['0'], edgecolor='none', density=True)
+
+    for comp in [2, 3]:
         X = np.expand_dims(field.flatten(), 1)
         model = GaussianMixture(n_components=comp, covariance_type='full')
         model.fit(X)
@@ -106,12 +114,8 @@ def em_analysis(field):
         # print(mu)
         # print(sigma)
 
-        # вывод гистограммы распределений фрактальных размерностей в поле
-        # count - кол-во, bins - значение размерности
-        counts, bins, _ = plt.hist(fractal.field.flatten(), bins=250, facecolor=colors['0'], edgecolor='none', density=True)
-        np.savetxt(folder + '/' + 'counts' + '.csv', counts, delimiter=";", newline="\n")
-        np.savetxt(folder + '/' + 'bins' + '.csv', bins, delimiter=";", newline="\n")
-        plt.title('Кластеризация EM-алгоритмом по ' + str(comp) + ' распределениям')
+        #np.savetxt(folder + '/' + 'counts' + '.csv', counts, delimiter=";", newline="\n")
+        #np.savetxt(folder + '/' + 'bins' + '.csv', bins, delimiter=";", newline="\n")
         # for i in range(comp):
         #     xi = np.linspace(mu[i][0] - 5 * math.sqrt(sigma[i][0][0]), mu[i][0] + 5 * math.sqrt(sigma[i][0][0]), 100)
         #     plt.plot(xi, stats.norm.pdf(xi, mu[i][0], math.sqrt(sigma[i][0][0])),
@@ -122,16 +126,18 @@ def em_analysis(field):
         res = np.zeros(x.shape)
         for i in range(comp):
             res += model.weights_[i] * stats.norm.pdf(x, mu[i][0], math.sqrt(sigma[i][0][0]))
-        plt.plot(x, res, color='red')
-        plt.tight_layout()
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
+        xForResults.append(x)
+        results.append(res)
         chi, p = stats.chisquare(res, f_exp=counts)
         print('Значение для n_comp = {} Хи-квадрат = {}, p = {}'.format(comp, chi, p))
-        chisquares[j] = chi
-        j += 1
+        chisquares.append(chi)
+
+    for i, (x, y) in enumerate(zip(xForResults, results)):
+        ax.plot(x, y, color=colors[str(i)])
+    plt.tight_layout()
+    ax.legend()
+    ax.grid(True)
+    plt.show()
 
     print(chisquares)
 
