@@ -2,6 +2,8 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 import FunctionsDistance
+import multiprocessing
+import time
 
 # from kneed import KneeLocator
 from KneeLocatorModule import KneeLocator
@@ -87,6 +89,7 @@ class FractalAnalysis:
         self._method = None
         self._windows = None
         self._sub_windows_sizes = None
+        self._countSubWindows = 4
         self._img = None
         self._segments = None
         self.field = None
@@ -453,6 +456,107 @@ class FractalAnalysis:
                   end='')
         print('\n')
 
+    def method_prism_parallel(self, windows, sub_windows_sizes):
+        """
+        Измерение фрактальных размерностей с помощью метода призм
+
+        Метод основан на измерении площади поверхности призм, наложенных на поверхность при разных масштабах
+
+        """
+        field = np.zeros(windows.shape[0])
+
+        # проход по каждому измерительному окну
+        for j in range(windows.shape[0]):
+            t_win = windows[j]
+
+            # массив значений площади поверхности призм при разных размерах субокон
+            Se = np.zeros(sub_windows_sizes.shape)
+
+            # проход по каждому размеру субокна
+            for si, size in enumerate(sub_windows_sizes):
+                # переменная для подсчёта площади поверхностей призм в окне при текущих субокнах
+                S = 0
+
+                # количество субокон по оси х и у
+                n_x = ceil(t_win.shape[1] / size)
+                n_y = ceil(t_win.shape[0] / size)
+
+                # проход по каждому субокну
+                for i_y in range(n_y):
+                    for i_x in range(n_x):
+                        y_beg = i_y * size
+                        y_end = (i_y + 1) * size
+                        if y_end > t_win.shape[0]:
+                            y_end = t_win.shape[0]
+                        x_beg = i_x * size
+                        x_end = (i_x + 1) * size
+                        if x_end > t_win.shape[1]:
+                            x_end = t_win.shape[1]
+                        cut = t_win[y_beg:y_end, x_beg:x_end]
+
+                        # ширина, высота и диагональ субокна
+                        sx = cut.shape[1]
+                        sy = cut.shape[0]
+                        sdi = sqrt(sx ** 2 + sy ** 2)
+
+                        # каждая точка призмы находится на высоте интенсивности яркости в этой точке
+                        a = int(cut[0][0])
+                        b = int(cut[0][sx - 1])
+                        c = int(cut[sy - 1][0])
+                        d = int(cut[sy - 1][sx - 1])
+                        # e = int(cut[int((sy - 1) / 2)][int((sx - 1) / 2)])
+                        e = (a + b + c + d) / 4
+
+                        # вычисление рёбра от каждой точки до центра субокна
+                        ae = sqrt((a - e) ** 2 + (sdi / 2) ** 2)
+                        be = sqrt((b - e) ** 2 + (sdi / 2) ** 2)
+                        ce = sqrt((c - e) ** 2 + (sdi / 2) ** 2)
+                        de = sqrt((d - e) ** 2 + (sdi / 2) ** 2)
+
+                        # вычисление рёбер между точками
+                        ab = sqrt((b - a) ** 2 + sx ** 2)
+                        bd = sqrt((b - d) ** 2 + sy ** 2)
+                        cd = sqrt((c - d) ** 2 + sx ** 2)
+                        ac = sqrt((a - c) ** 2 + sy ** 2)
+
+                        # вычисление периметра каждого треугольника
+                        pA = (ab + be + ae) / 2
+                        pB = (bd + be + de) / 2
+                        pC = (cd + de + ce) / 2
+                        pD = (ac + ce + ae) / 2
+
+                        # вычисление площади каждого треугольника
+                        SA = sqrt(pA * (pA - ab) * (pA - be) * (pA - ae))
+                        SB = sqrt(pB * (pB - bd) * (pB - be) * (pB - de))
+                        SC = sqrt(pC * (pC - cd) * (pC - de) * (pC - ce))
+                        SD = sqrt(pD * (pD - ac) * (pD - ce) * (pD - ae))
+
+                        # вычисление площади поверхности всей призмы с остальными в измерительном окне
+                        S += SA + SB + SC + SD
+                Se[si] = S
+
+            # логарифмирование площади поверхностей призм и размеры субокон
+            lgS = np.zeros(Se.shape)
+            lge = np.zeros(sub_windows_sizes.shape)
+            for k in range(sub_windows_sizes.shape[0]):
+                lgS[k] = log(Se[k])
+                lge[k] = log(sub_windows_sizes[k])
+
+            # по МНК находится наклон регрессии логарифма площади от логарифма размера субокна
+            A = np.vstack([lge, np.ones(len(lge))]).T
+            D, _ = np.linalg.lstsq(A, lgS, rcond=None)[0]
+
+            # отрицательный наклон регрессии + 2 - есть фрактальная размерность в данной точке
+            field[j] = 2 - D
+
+            # print('\rMethod of prism [', '█' * int(i / windows.shape[0] * 20),
+            #      ' ' * int((windows.shape[0] - i) / windows.shape[0] * 20), ']\t', i, '\t/ ',
+            #      windows.shape[0] - 1,
+            #      end='')
+        # print('\n')
+
+        return field
+
     def _generate_field(self):
         """
         Функция генерации поля фрактальных размерностей
@@ -460,14 +564,34 @@ class FractalAnalysis:
         """
         self._generate_windows()
 
+        self._sub_windows_sizes = np.array([int((self._win_size + (2 ** degree - 1)) / 2 ** degree)
+                                            for degree in range(self._countSubWindows)])
+        """
         self._sub_windows_sizes = np.array([self._win_size,
                                             int((self._win_size + 1) / 2),
                                             int((self._win_size + 3) / 4)])
-
+        """
         if self._method == 'cubes':
             self._method_cubes()
         else:
-            self._method_prism()
+            # self._method_prism()
+
+            timer = time.time()
+            parallel_result = list()
+            with multiprocessing.Pool() as pool:
+                print('Result: ')
+                results = [pool.apply_async(self.method_prism_parallel, args=(arg1, self._sub_windows_sizes))
+                           for arg1 in self._windows]
+
+                for res in results:
+                    parallel_result.append(res.get())
+
+                pool.close()
+                pool.join()
+
+            self.field = np.asarray(parallel_result)
+            print('Тест с параллельными вычислениями занял %.6f' % (time.time() - timer))
+
 
     def set_param(self, min_samples, min_transition, median_kernel):
         self._min_samples = min_samples
