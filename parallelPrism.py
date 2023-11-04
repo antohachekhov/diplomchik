@@ -251,11 +251,12 @@ def field_to_image(input_field, show=False):
 
 
 if __name__ == '__main__':
-    win_size = 32
+    win_size = 64
     sub_windows_sizes = np.array([win_size,
                                   int((win_size + 1) / 2),
-                                  int((win_size + 3) / 4)])
-    image = cv.imread(r"C:\Users\bortn\Desktop\diplomchik\analysis\old dataset\5min_1\[Filtered] test.jpg", cv.IMREAD_GRAYSCALE)
+                                  int((win_size + 3) / 4),
+                                  int((win_size + 7) / 8)])
+    image = cv.imread(r"C:\Users\bortn\Desktop\diplomchik\analysis\old dataset\15min_1\[Filtered] 15_1.jpg", cv.IMREAD_GRAYSCALE)
     windows = generate_windows(image, win_size, 1, 1)
     # p = multiprocessing.Process(target=method_prism, args=(windows, sub_windows_sizes, ))
     # p.start()
@@ -280,16 +281,19 @@ if __name__ == '__main__':
 
     # Тест без параллельного
     timer = time.time()
-    notParallelResult = method_prism(windows1, sub_windows_sizes)
+    #notParallelResult = method_prism(windows1, sub_windows_sizes)
     print('Тест без параллельных вычислений занял %.6f' % (time.time() - timer))
 
     imgParallel = field_to_image(parallel_result, False)
-    imgNotParallel = field_to_image(notParallelResult)
+    #imgNotParallel = field_to_image(notParallelResult)
 
-    fig, axis = plt.subplots(1, 2)
-    axis[0].imshow(imgNotParallel, cmap='gray')
-    axis[0].set_title('Не параллельно')
-    axis[1].imshow(imgParallel, cmap='gray')
-    axis[1].set_title('Параллельно')
+    # fig, axis = plt.subplots(1, 2)
+    # axis[0].imshow(imgNotParallel, cmap='gray')
+    # axis[0].set_title('Не параллельно')
+    # axis[1].imshow(imgParallel, cmap='gray')
+    # axis[1].set_title('Параллельно')
+
+    plt.imshow(imgParallel, cmap='gray')
+
     plt.show()
     print('end')
