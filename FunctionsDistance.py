@@ -1,6 +1,7 @@
 import numpy as np
 from math import dist, fabs
 
+
 class Line:
     """
         Объект класса - прямая линия,
@@ -18,10 +19,20 @@ class Line:
         с : float, по умолчанию = 1
             Свободный коэффициент в каноническом уравнении прямой
     """
+
     def __init__(self, a=1., b=1., c=0.):
         self.a = a
         self.b = b
         self.c = c
+
+    def __call__(self, x, *args, **kwargs):
+        """
+        Возвращает значение y прямой при заданной координате x
+
+        :param x: float
+            Значение x, в котором нужно найти точку прямой
+        """
+        return (self.a / self.b) * x + (self.c / self.b)
 
     def y(self, x):
         """
@@ -53,6 +64,13 @@ class Line:
                 raise ValueError('Number of features must be 2')
             else:
                 return self.a * points[:, 0] - self.b * points[:, 1] + self.c
+        elif points.ndim == 3:
+            # points - набор массивов с одной точкой
+            if points.shape[2] != 2:
+                # points не являются точками в двумерном пространстве
+                raise ValueError('Number of features must be 2')
+            else:
+                return self.a * points[:, :, 0] - self.b * points[:, :, 1] + self.c
         else:
             raise ValueError('Points have incorrect dimension')
 
@@ -136,7 +154,7 @@ def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
         Набор точек, задающие кривую-2
     :param eps: float, по умолчанию = 1е-7
         Точность вычислений
-    :param n_diff: int, по умолчанию = 1е-7
+    :param n_diff: int, по умолчанию = 3
         Шаг дифференцирования
     """
     distanceList = np.empty(shape=0)
@@ -212,8 +230,8 @@ def functions_distance_normal(curve1, curve2, eps=1e-7, n_diff=3):
         # n += 1
 
     # Находим среднее расстояние
-    #distance /= n
-    #return distance, distanceList
+    # distance /= n
+    # return distance, distanceList
     return distanceList
 
 
