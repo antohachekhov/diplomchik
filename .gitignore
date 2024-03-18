@@ -6,3 +6,6 @@
 /image/
 tests.spec
 modified_img.jpg
+listDistances*.txt
+distances.txt
+/testMeasure2/
