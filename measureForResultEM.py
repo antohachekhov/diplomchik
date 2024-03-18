@@ -42,16 +42,16 @@ def segment_distribution(img, intensity, win_size, show_step=True, dx=1, dy=1):
     # массив для маски с областями для сегментации
     img2 = np.zeros(output.shape, dtype=np.uint8)
 
-    # заполнение маски
-    for i in range(1, nb_components):
-        # заносятся только те объекты, площадь которых больше средней площади всех объектов
-        if stats[i, -1] > meanS:
-            img2[output == i] = 255
-
     # наращивание объектов
     radius = int(win_size / 2 if win_size / 2 % 2 == 1 else win_size / 2 - 1)
     kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (radius, radius))
     result = cv.dilate(img2, kernel)
+
+    # заполнение маски
+    for i in range(1, nb_components):
+        # заносятся только те объекты, площадь которых больше средней площади всех объектов
+        if stats[i, -1] > meanS:
+            result[output == i] = 255
 
     if show_step:
         plt.subplot(2, 3, 1)
@@ -167,11 +167,17 @@ if __name__ == '__main__':
     # win_size = 0
 
     # Тест с переходной областью
-    image = cv.imread(r"C:\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\[Filtered] 20.jpg",
-                     cv.IMREAD_GRAYSCALE)
-    field = np.loadtxt(r"C:\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\field_filtered_x1y1w30.csv",
-                      delimiter=';')
-    win_size = 30
+    # image = cv.imread(r"C:\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\[Filtered] 20.jpg",
+    #                  cv.IMREAD_GRAYSCALE)
+    # field = np.loadtxt(r"C:\Users\bortn\Desktop\diplomchik\analysis\old dataset\20min_1\field_filtered_x1y1w30.csv",
+    #                   delimiter=';')
+
+    image = cv.imread(r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\25\1-63\1-63.tif",
+                      cv.IMREAD_GRAYSCALE)
+    field = np.loadtxt(r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\25\1-63\w32_d11.csv",
+                       delimiter=';')
+
+    win_size = 32
     mask = segment_min_distribution(image, win_size, field, 3)
     nb_components, output, stats, centroids = cv.connectedComponentsWithStats(mask, 4, cv.CV_32S)
     contours0, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)

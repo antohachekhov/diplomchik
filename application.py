@@ -17,6 +17,9 @@ import scipy.stats as stats
 import math
 import matplotlib.lines as lns
 from functools import partial
+import multiprocessing
+
+from measureObjectOfBinaryImage import Measure
 
 
 class ScaleEdit(Toplevel):
@@ -513,6 +516,10 @@ class App(Tk):
                 plt.imshow(cv.cvtColor(mask_stratum, cv.COLOR_GRAY2RGB))
                 plt.show()
 
+                measurer = Measure()
+                medianWidth = measurer(self.img, mask_stratum, self.winsize.get())
+                print(f'Медианное значение ширины {medianWidth}')
+
                 img = cv.cvtColor(self.img, cv.COLOR_BGR2RGB)
                 # создание слоя-заливки
                 color_layer = np.zeros(img.shape, dtype=np.uint8)
@@ -837,6 +844,6 @@ class App(Tk):
 
         return result
 
-
-app = App()
-app.mainloop()
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()

@@ -14,7 +14,6 @@ from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
 from statsmodels.nonparametric.api import lowess
 
-
 # from finta import TA
 
 
@@ -564,6 +563,7 @@ class FractalAnalysis:
         """
         self._generate_windows()
 
+        # Деление изображения на окна
         self._sub_windows_sizes = np.array([int((self._win_size + (2 ** degree - 1)) / 2 ** degree)
                                             for degree in range(self._countSubWindows)])
         """
@@ -574,12 +574,16 @@ class FractalAnalysis:
         if self._method == 'cubes':
             self._method_cubes()
         else:
-            # self._method_prism()
+            # Метод призм обычный
+            self._method_prism()
 
+            """
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!НЕ РАБОТАЕТ!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # Метод призм с параллельными вычислениями
+            print('Начинаются параллельные вычисления!')
             timer = time.time()
             parallel_result = list()
             with multiprocessing.Pool() as pool:
-                print('Result: ')
                 results = [pool.apply_async(self.method_prism_parallel, args=(arg1, self._sub_windows_sizes))
                            for arg1 in self._windows]
 
@@ -588,10 +592,10 @@ class FractalAnalysis:
 
                 pool.close()
                 pool.join()
-
+            
             self.field = np.asarray(parallel_result)
             print('Тест с параллельными вычислениями занял %.6f' % (time.time() - timer))
-
+            """
 
     def set_param(self, min_samples, min_transition, median_kernel):
         self._min_samples = min_samples

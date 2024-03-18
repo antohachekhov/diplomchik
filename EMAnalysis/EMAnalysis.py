@@ -11,16 +11,21 @@ colors = {'0': '#BEF73E',
           '3': '#0772A1',
           '4': '#2818B1'}
 
+lineStyles = ['-', '--']
+
 colorsList = ['red', 'blue']
 
-filedFile = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
-#filedFile = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_field_prism_w30x1y1.csv"
+chiCalculate = True
+tableChiShow = True
+
+#filedFile = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
+filedFile = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_field_prism_w30x1y1.csv"
 field = np.loadtxt(filedFile, delimiter=';')
 
 comp_array = [2, 3]
-chisquares = []
 
-# plt.title('Распределение фрактальных размерностей на изображении')
+if chiCalculate:
+    chisquares = []
 
 # вывод гистограммы распределений фрактальных размерностей в поле
 # count - кол-во, bins - значение размерности
@@ -51,7 +56,8 @@ for comp in comp_array:
         res += model.weights_[i] * stats.norm.pdf(x, mu[i][0], sqrt(sigma[i][0][0]))
     # for i in range(comp):
     #     leg += '' #rf'$\mu_{i}={mu[i][0]:.2f}, \sigma_{i}$={sigma[i][0][0]:.2f}' + '\n'
-    plt.plot(x, res, color=colors[str(comp)], label=rf'$f_{comp}(x)$', linewidth=2)
+    plt.plot(x, res, color=colors[str(comp)], label=rf'$f_{comp}(x)$', linewidth=2,
+             linestyle=lineStyles[comp - min(comp_array)])
 
     # создание таблицы с параметрами компонент в смеси
     # col_labels = [r'$\it{i}$', r'$\omega_i$', r'$\mu_i$', r'$\sigma_i$']
@@ -59,9 +65,10 @@ for comp in comp_array:
     # table = plt.table(cellText=table_vals, colLabels=col_labels, loc='upper right', colWidths=[0.05, 0.1, 0.1, 0.1])
     # table.set_zorder(100) # Artists with lower zorder values are drawn first.
 
-    chi, p = stats.chisquare(counts, f_exp=res)
-    print('Значение для n_comp = {} Хи-квадрат = {}, p = {}'.format(comp, chi, p))
-    chisquares.append(chi)
+    if chiCalculate:
+        chi, p = stats.chisquare(counts, f_exp=res)
+        print('Значение для n_comp = {} Хи-квадрат = {}, p = {}'.format(comp, chi, p))
+        chisquares.append(chi)
 
     # выделение областей, принадлежащих классу с минимальным математическим ожиданием
 
@@ -83,16 +90,18 @@ for comp in comp_array:
     #     i +=
 
 # создание таблицы со значениями хи-квадрат
-col_labels = [r'$\it{n}$', r'$\chi^2$']
-table_vals = [[comp, f'{chisquares[comp - min(comp_array)]:.2f}'] for comp in comp_array]
-table = plt.table(cellText=table_vals, colLabels=col_labels, loc='center right',
-                  colWidths=[0.05, 0.2], cellLoc='center')
-table.set_zorder(100)  # Artists with lower zorder values are drawn first.
-table.set_fontsize(14)
-table.scale(1, 2)
+if tableChiShow:
+    col_labels = [r'$\it{n}$', r'$\chi^2$']
+    table_vals = [[comp, f'{chisquares[comp - min(comp_array)]:.2f}'] for comp in comp_array]
+    table = plt.table(cellText=table_vals, colLabels=col_labels, loc='center right',
+                      colWidths=[0.05, 0.2], cellLoc='center')
+    table.set_zorder(100)  # Artists with lower zorder values are drawn first.
+    table.set_fontsize(14)
+    table.scale(1, 2)
 
 plt.grid(True)
 plt.legend(fontsize=14)
+# plt.title('Распределение фрактальных размерностей на изображении')
 plt.xlabel(r'Фрактальная размерность, $\it{D}$')
 plt.ylabel('Частота')
 plt.tight_layout()
