@@ -12,9 +12,7 @@ def trianglePrism(window, subWindowsSizes):
     Se = np.zeros(subWindowsSizes.shape)
 
     # проход по каждому размеру субокна
-    for si in range(subWindowsSizes.shape[0]):
-        size = subWindowsSizes[si]
-
+    for si, size in enumerate(subWindowsSizes):
         # переменная для подсчёта площади поверхностей призм в окне при текущих субокнах
         S = 0
 
@@ -76,12 +74,9 @@ def trianglePrism(window, subWindowsSizes):
                 S += SA + SB + SC + SD
         Se[si] = S
 
-    # логарифмирование площади поверхностей призм и размеры субокон
-    lgS = np.zeros(Se.shape)
-    lge = np.zeros(subWindowsSizes.shape)
-    for k in range(subWindowsSizes.shape[0]):
-        lgS[k] = log(Se[k])
-        lge[k] = log(subWindowsSizes[k])
+    # логарифмирование площадей поверхностей призм и размеров субокон
+    lgS = np.log(Se)
+    lge = np.log(subWindowsSizes)
 
     # по МНК находится наклон регрессии логарифма площади от логарифма размера субокна
     A = np.vstack([lge, np.ones(len(lge))]).T
@@ -102,7 +97,7 @@ def cubes(window, subWindowsSizes):
     n = np.zeros(subWindowsSizes.shape)
 
     # проход по каждому размеру вспомогательных окон
-    for ei in range(subWindowsSizes.shape[0]):
+    for ei, size in enumerate(subWindowsSizes):
         size = subWindowsSizes[ei]
 
         # переменная для подсчёта количества кубов в пределах измерительного окна
@@ -141,11 +136,8 @@ def cubes(window, subWindowsSizes):
         n[ei] = n_e
 
     # логарифмируем количество размеров субокон и количество кубов для разных размеров субокон
-    lgn = np.zeros(n.shape)
-    lge = np.zeros(subWindowsSizes.shape)
-    for k in range(subWindowsSizes.shape[0]):
-        lgn[k] = log(n[k])
-        lge[k] = log(subWindowsSizes[k])
+    lgn = np.log(n)
+    lge = np.log(subWindowsSizes)
 
     # по МНК находим наклон регрессии логарифма количества кубов от логарифма размера субокон
     A = np.vstack([lge, np.ones(len(lge))]).T
