@@ -4,6 +4,14 @@ import time
 import os
 
 class WindowProcessing:
+    class WindowFunc(object):
+        def __init__(self, func, *args):
+            self._func = func
+            self._args = args
+
+        def __call__(self, window):
+            return self._func(window, *self._args)
+
     def __init__(self, **kwargs):
         self._winSize = kwargs.get('windowSize', 32)
         self._dx = kwargs.get('X-axisStep', 1)
@@ -26,35 +34,28 @@ class WindowProcessing:
                   (img.strides[-1] * self._dx,) + img.strides[-2:]
         return np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
 
-    def processing(self, img:np.ndarray, windowFunc, *args):
+    def processing(self, img:np.ndarray, userWindowFunc, *args):
         """
         Оконная обработка изображения по переданной оконной функции
         :param img: ndarray
             Изображение
-        :param windowFunc: function
+        :param userWindowFunc: function
             Оконная функция. В качестве первого аргумента функции должна принимать двухмерный массив - срез изображения
         :param args: list
             Список дополнительных аргументов функции
         :return: ndarray
             Массив результатов вычисления оконной функции для изображения
         """
+        windowFunc = WindowProcessing.WindowFunc(userWindowFunc, *args)
         windows = self._generateWindows(img)
-        result = list()
         if self._parallelComputing:
-            print(os.cpu_count())
             timer = time.time()
             with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-                parallelResults = [[pool.apply_async(windowFunc, args=(window, *args))
-                        for window in rowImage] for rowImage in windows]
-                # parallelResults = []
-                for rowRes in parallelResults:
-                    result.append([resValue.get() for resValue in rowRes])
-                # pool.close()
-                # pool.join()
+                result = [pool.map(windowFunc, rowWindows) for rowWindows in windows]
             print('Тест с параллельными вычислениями занял %.6f' % (time.time() - timer))
         else:
             timer = time.time()
-            func_vec = np.vectorize(lambda window: windowFunc(window, *args), signature='(w,w)->()')
-            result = func_vec(windows)
+            windowFuncVectorize = np.vectorize(windowFunc, signature='(w,w)->()')
+            result = windowFuncVectorize(windows)
             print('Тест без параллельных вычислений занял %.6f' % (time.time() - timer))
         return np.asarray(result)
