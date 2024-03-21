@@ -4,12 +4,12 @@ import numpy as np
 from FunctionsDistance import Line
 from math import fabs, sqrt
 
-class Measure:
-    def __init__(self):
-        pass
+class MeasureObjects:
+    def __init__(self, showStep:bool=False):
+        self._showStep = showStep
 
     @staticmethod
-    def distance(point1, point2):
+    def _distance(point1, point2):
         """
         Вычисление расстояния между двумя точками
         :param point1: тип list - (x,y)
@@ -18,39 +18,40 @@ class Measure:
         """
         return sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-    def __call__(self, image, mask, winSize, *args, **kwargs):
+    def __call__(self, image, mask, winSize):
         contours0, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
-        index = 0
-        layer = 0
+        if self._showStep:
+            index = 0
+            layer = 0
 
-        def update():
-            vis = image.copy()
-            cv.drawContours(vis, contours0, index, (150, 0, 0), 2, cv.LINE_AA, hierarchy, layer)
-            cv.imshow('contours', vis)
+            def update():
+                vis = image.copy()
+                cv.drawContours(vis, contours0, index, (150, 0, 0), 2, cv.LINE_AA, hierarchy, layer)
+                cv.imshow('contours', vis)
 
-        def update_index(v):
-            global index
-            index = v - 1
-            update()
+            def update_index(v):
+                global index
+                index = v - 1
+                update()
 
-        def update_layer(v):
-            global layer
-            layer = v
-            update()
+            def update_layer(v):
+                global layer
+                layer = v
+                update()
 
-        update_index(0)
-        update_layer(0)
-        cv.createTrackbar("contour", "contours", 0, 7, update_index)
-        cv.createTrackbar("layers", "contours", 0, 7, update_layer)
+            update_index(0)
+            update_layer(0)
+            cv.createTrackbar("contour", "contours", 0, 7, update_index)
+            cv.createTrackbar("layers", "contours", 0, 7, update_layer)
 
-        cv.waitKey()
-        cv.destroyAllWindows()
+            cv.waitKey()
+            cv.destroyAllWindows()
 
-        for i in range(len(contours0)):
-            if hierarchy[0, i, 3] == -1:
-                plt.plot(contours0[i][:, 0, 0], contours0[i][:, 0, 1])
-        plt.show()
+            for i in range(len(contours0)):
+                if hierarchy[0, i, 3] == -1:
+                    plt.plot(contours0[i][:, 0, 0], contours0[i][:, 0, 1])
+            plt.show()
 
         nDiff = 3
         eps = 1e-7
@@ -279,7 +280,7 @@ class Measure:
                     minPoints = None
                     minDistance = 1e+20
                     for point in Points:
-                        dInPoint = self.distance(np.array([x0, y0]), point)
+                        dInPoint = self._distance(np.array([x0, y0]), point)
                         if dInPoint < minDistance:
                             minDistance = dInPoint
                             minPoints = point
