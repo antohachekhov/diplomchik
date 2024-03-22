@@ -32,12 +32,20 @@ class EstimationTransitionLayer:
             'widthOfMedianKernel': 21,
             'columnarAnalysis': True,
             'LOWESS-frac': 0.1
+        },
+        'Measure': {
+            'CentralTendency': 'median'
         }
     }
 
     WindowFunctions = {
         'Prism': FractalAnalysisInImage.trianglePrism,
         'Cubes': FractalAnalysisInImage.cubes
+    }
+
+    CentralTendency = {
+        'median': np.median,
+        'mean': np.mean
     }
 
     def __init__(self, showStep:bool=False):
@@ -54,11 +62,11 @@ class EstimationTransitionLayer:
             inter = set(kwargs[key]).intersection(self._settings[key])
             self._settings[key].update((keyIntersec, kwargs[key][keyIntersec]) for keyIntersec in inter)
 
-    def _checkField(self, field:np.ndarray) -> bool:
+    def _checkField(self, image, field:np.ndarray) -> bool:
         # размер поля должен соответсвовать размеру изображения
-        if field.shape != (int((self._analyzedImg.img.shape[0] - self._settings['WindowProcessing']['windowSize']) /
+        if field.shape != (int((image.shape[0] - self._settings['WindowProcessing']['windowSize']) /
                                self._settings['WindowProcessing']['Y-axisStep'] + 1),
-                           int((self._analyzedImg.img.shape[1] - self._settings['WindowProcessing']['windowSize']) /
+                           int((image.shape[1] - self._settings['WindowProcessing']['windowSize']) /
                                self._settings['WindowProcessing']['X-axisStep'] + 1)):
             raise ValueError('The size of the field does not correspond to the size of the image and'
                              ' the selected window parameters')
@@ -66,7 +74,7 @@ class EstimationTransitionLayer:
 
     def setImage(self, image:np.ndarray, field:np.ndarray=None, mask:np.ndarray=None):
         if field is not None:
-            self._checkField(field)
+            self._checkField(image, field)
         self._analyzedImg = Image(image, field, mask)
 
     def getField(self):
@@ -450,4 +458,12 @@ class EstimationTransitionLayer:
         if self._analyzedImg.mask is None:
             self._segmentTransitionLayer()
         measurer = MeasureObjects(self._showStep)
-        return measurer(self._analyzedImg.img, self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
+        distances = measurer(self._analyzedImg.img, self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
+
+        # if self._showStep:
+        #     plt.hist(distances)
+        #     plt.show()
+
+        result = EstimationTransitionLayer.CentralTendency[self._settings['Measure']['CentralTendency']](distances)
+
+        return result
