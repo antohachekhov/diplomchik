@@ -48,6 +48,7 @@ class WindowProcessing:
         """
         windowFunc = WindowProcessing.WindowFunc(userWindowFunc, *args)
         windows = self._generateWindows(img)
+        print('Началось вычисление поля ФР')
         if self._parallelComputing:
             timer = time.time()
             with multiprocessing.Pool(processes=os.cpu_count()) as pool:
