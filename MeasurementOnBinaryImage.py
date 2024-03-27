@@ -267,9 +267,9 @@ class MeasureObjects:
 
         # составление множества точек, не входящих в зону рамки маски
         areaX = np.logical_and(contourObject[:, :, 0] > borderSize / 2,
-                               contourObject[:, :, 0] < shape[0] - borderSize / 2)
+                               contourObject[:, :, 0] < shape[1] - borderSize / 2)
         areaY = np.logical_and(contourObject[:, :, 1] > borderSize / 2,
-                               contourObject[:, :, 1] < shape[1] - borderSize / 2)
+                               contourObject[:, :, 1] < shape[0] - borderSize / 2)
         area = np.logical_and(areaX, areaY)
         contourObjectFiltered = contourObject[area]
 
