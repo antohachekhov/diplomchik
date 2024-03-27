@@ -1,3 +1,5 @@
+import time
+import io
 import numpy as np
 from WindowProcessing import WindowProcessing
 import FractalAnalysisInImage
@@ -12,6 +14,8 @@ from statsmodels.nonparametric.api import lowess
 from sklearn.mixture import GaussianMixture
 from MeasurementOnBinaryImage import MeasureObjects
 from Image import Image
+from PIL import Image as PILImage
+from multiprocessing.shared_memory import SharedMemory
 
 class EstimationTransitionLayer:
     DefaultSettings = {
@@ -48,14 +52,57 @@ class EstimationTransitionLayer:
         'mean': np.mean
     }
 
-    def __init__(self, showStep:bool=False):
+    Colors = {
+        -1: (139, 0, 139), # темно-пурпурный
+        0: (0, 255, 255), # желтый
+        1: (180, 119, 31),  # голубой
+        2: tuple(reversed((44, 160, 44))), # зелёный
+        3: tuple(reversed((214, 39, 40))), # красный
+        4: tuple(reversed((148, 103, 189))), # пурпурный
+        5: tuple(reversed((140, 86, 75))), # коричневый
+        6: tuple(reversed((227, 119, 194))), # розовый
+        7: tuple(reversed((188, 189, 34))), # оливковый
+        8: tuple(reversed((23, 190, 207))), # циан
+        9: (0, 0, 128), # бордовый
+        10: (80, 127, 255), # коралл
+        11: (0, 165, 255), # апельсин
+        12: (212, 255, 127), # Аквамарин
+        13: (0, 252, 124), # газон зеленый
+        14: (114, 128, 250), # лосось
+        15: (128, 0, 0), # флот
+        16: (50, 205, 154), # желтый зеленый
+        17: (180, 105, 255), # ярко-розовый
+        18: (130, 0, 75), # индиго
+        19: (255, 0, 0), # синий
+        20: (14, 127, 255),  # оранжевый
+        21: (50, 205, 50), # зеленый лайм
+        22: (140, 230, 240), # хаки
+        23: (34, 139, 34), # зеленый лес
+        24: (154, 250, 0), # средний весенний
+        25: (0, 215, 255), # золото
+        26: (237, 149, 100), # кукуруза цветок синий
+        27: (144, 238, 144), # светло-зеленый
+        28: (255, 255, 0), # аква
+        29: (113, 179, 60), # средний морской зеленый
+    }
+
+    def __init__(self, showStep:bool=False, mutex=None, nameSharedMemory=None):
         self._analyzedImg = None
         self._showStep = showStep
         self._settings = EstimationTransitionLayer.DefaultSettings
+        self._mutex = mutex
+        self._sharedMemory = None
+        self._sharedMemoryBuffer = None
+        if mutex is not None and nameSharedMemory is not None:
+            self._mutex.acquire()
+            self._sharedMemory = SharedMemory(name=nameSharedMemory, create=False)
 
     def clear(self):
         self._analyzedImg = None
         self._settings = EstimationTransitionLayer.DefaultSettings
+        self._sharedMemory = None
+        if self._mutex is not None:
+            self._mutex.release()
 
     def setSettings(self, **kwargs):
         for key in kwargs:
@@ -76,6 +123,11 @@ class EstimationTransitionLayer:
         if field is not None:
             self._checkField(image, field)
         self._analyzedImg = Image(image, field, mask)
+
+        if self._sharedMemory is not None:
+            self._sharedMemoryBuffer = np.ndarray(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB).shape,
+                                                  dtype=np.uint8, buffer=self._sharedMemory.buf)
+
 
     def getField(self):
         return self._analyzedImg.field
@@ -161,6 +213,14 @@ class EstimationTransitionLayer:
             extr = np.append(extr, [i])
         return ampl, extr
 
+    @staticmethod
+    def _fig2img(fig):
+        buf = io.BytesIO()
+        fig.savefig(buf)
+        buf.seek(0)
+        img = PILImage.open(buf)
+        return img
+
     def _analysisFieldWithTwoComponents(self):
         """
         Сегментация переходного слоя по сильным изменения поля
@@ -203,6 +263,22 @@ class EstimationTransitionLayer:
             point[0] = int(point[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing']['windowSize'] / 2)
             point[1] = int(point[1] * self._settings['WindowProcessing']['Y-axisStep'] + self._settings['WindowProcessing']['windowSize'] / 2)
 
+        if self._mutex is not None:
+            # plt.imshow(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB))
+            # plt.scatter(changeBegin[:, 0], changeBegin[:, 1], c='red', s=1)
+            # plt.scatter(changeEnd[:, 0], changeEnd[:, 1], c='red', s=1)
+            # fig = plt.gcf()
+            # self._sharedMemory = self._fig2img(fig)
+            tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
+            for b, e in zip(changeBegin, changeEnd):
+                tempImg = cv.circle(tempImg, (b[0], b[1]), radius=3, color=(0, 0, 255), thickness=-1)
+                tempImg = cv.circle(tempImg, (e[0], e[1]), radius=3, color=(0, 0, 255), thickness=-1)
+            self._sharedMemoryBuffer[:] = cv.cvtColor(tempImg, cv.COLOR_BGR2RGB)
+
+            self._mutex.release()
+            time.sleep(1)
+            self._mutex.acquire()
+
         # Оценка параметра eps алгоритма DBSCAN
         nearestNeighbors = NearestNeighbors(n_neighbors=11)
         neighbors = nearestNeighbors.fit(changeBegin)
@@ -218,6 +294,26 @@ class EstimationTransitionLayer:
         # кластеризация точек, соответствующих началу изменения
         dbscanCluster = DBSCAN(eps=self._settings['DBSCAN']['maxDistanceBetweenPointsInSingleCluster'], min_samples=self._settings['DBSCAN']['minSamplesInCluster'])
         dbscanCluster.fit(changeBegin)
+
+        if self._mutex is not None:
+            # plt.imshow(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB))
+            # plt.scatter(changeBegin[:, 0], changeBegin[:, 1], c=dbscanCluster.labels_, s=15)
+            # plt.scatter(changeEnd[:, 0], changeEnd[:, 1], c=dbscanCluster.labels_, s=15)
+            # fig = plt.gcf()
+            # self._sharedMemory = self._fig2img(fig)
+
+            tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
+            for i, z in enumerate(zip(changeBegin, changeEnd)):
+                b, e = z
+                tempImg = cv.circle(tempImg, (b[0], b[1]), radius=3,
+                                    color=EstimationTransitionLayer.Colors[dbscanCluster.labels_[i]], thickness=-1)
+                tempImg = cv.circle(tempImg, (e[0], e[1]), radius=3,
+                                    color=EstimationTransitionLayer.Colors[dbscanCluster.labels_[i]], thickness=-1)
+            self._sharedMemoryBuffer[:] = cv.cvtColor(tempImg, cv.COLOR_BGR2RGB)
+
+            self._mutex.release()
+            time.sleep(1)
+            self._mutex.acquire()
 
         # получение списка номеров кластеров и их размеров
         uniqLabels, labelCount = np.unique(dbscanCluster.labels_, return_counts=True)
@@ -241,6 +337,26 @@ class EstimationTransitionLayer:
 
         clusteredChangeBegin = np.delete(clusteredChangeBegin, 0, axis=0)
         clusteredChangeEnd = np.delete(clusteredChangeEnd, 0, axis=0)
+
+        if self._mutex is not None:
+            # plt.imshow(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB))
+            # plt.scatter(clusteredChangeBegin[:, 0], clusteredChangeBegin[:, 1], c=filteredLabels, s=10)
+            # plt.scatter(clusteredChangeEnd[:, 0], clusteredChangeEnd[:, 1], c=filteredLabels, s=10)
+            # fig = plt.gcf()
+            # self._sharedMemory = self._fig2img(fig)
+
+            tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
+            for i, z in enumerate(zip(clusteredChangeBegin, clusteredChangeEnd)):
+                b, e = z
+                tempImg = cv.circle(tempImg, (b[0], b[1]), radius=3,
+                                    color=EstimationTransitionLayer.Colors[filteredLabels[i]], thickness=-1)
+                tempImg = cv.circle(tempImg, (e[0], e[1]), radius=3,
+                                    color=EstimationTransitionLayer.Colors[filteredLabels[i]], thickness=-1)
+            self._sharedMemoryBuffer[:] = cv.cvtColor(tempImg, cv.COLOR_BGR2RGB)
+
+            self._mutex.release()
+            time.sleep(1)
+            self._mutex.acquire()
 
         if self._showStep:
             # перевод изображения в цветовое пространство RGB
@@ -268,13 +384,17 @@ class EstimationTransitionLayer:
             plt.show()
             plt.close()
 
-        # nCluster = np.unique(filteredLabels).shape[0]
-        # distancesOfCurves = (np.zeros(shape=nCluster), np.zeros(shape=(nCluster, 2, 2)))
-        # distancesCurvesVertical = (np.zeros(shape=nCluster), np.zeros(shape=(nCluster, 2, 2)))
-        # iCluster = 0
+        # if self._mutex is not None:
+        #     # plt.imshow(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB))
+        #     self._sharedMemory = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB)
+        #
+        #     self._mutex.release()
+        #     time.sleep(1)
+        #     self._mutex.acquire()
 
         self.listDistancesInEveryPoint = []
 
+        tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
         # проход по каждому кластеру
         for i in np.unique(filteredLabels):
             x = clusteredChangeBegin[filteredLabels == i, 0]
@@ -286,11 +406,14 @@ class EstimationTransitionLayer:
             # строится регрессионная модель для точек, соответствующих концу переходного изменения поля
             z2 = lowess(y2, x, frac=self._settings['AnalysisOfFieldWithTwoComponents']['LOWESS-frac'])
 
-            if self._showStep:
-                plt.plot(z1[:, 0], z1[:, 1], '--', c='blue', linewidth=3)
-                plt.plot(z2[:, 0], z2[:, 1], '--', c='blue', linewidth=3)
-                # plt.annotate('{}'.format(distancesOfCurves[0][iCluster]), xy=(z1[0, 0], z1[0, 1]),
-                #              xytext=(z1[0, 0], z1[0, 1]), arrowprops={'facecolor': 'white', 'shrink': 0.1})
+            if self._mutex is not None:
+                # cv.drawContours(tempImg, (z1.reshape((z1.shape[0], 1, 2)), ), -1, (255, 0, 0), 3)
+                # cv.drawContours(tempImg, (z2.reshape((z2.shape[0], 1, 2)), ), -1, (255, 0, 0), 3)
+                cv.polylines(tempImg, [z1.astype(np.int32).reshape((-1, 1, 2))], False, (255, 0, 0), 2)
+                cv.polylines(tempImg, [z2.astype(np.int32).reshape((-1, 1, 2))], False, (255, 0, 0), 2)
+
+                # plt.plot(z1[:, 0], z1[:, 1], '--', c='blue', linewidth=3)
+                # plt.plot(z2[:, 0], z2[:, 1], '--', c='blue', linewidth=3)
 
             # округляем точки до целых, чтобы поставить им в соответствие пиксели изображения
             pointsBeg = np.around(z1).astype(np.int32)
@@ -299,19 +422,19 @@ class EstimationTransitionLayer:
             pointsEnd = np.flipud(pointsEnd).reshape((-1, 1, 2))
             pts = np.concatenate([pointsBeg, pointsEnd, pointsBeg[0].reshape((-1, 1, 2))])
 
-            # distancesOfCurves[1][iCluster, 0] = pointsBeg[0][0]
-            # distancesOfCurves[1][iCluster, 1] = pointsEnd[0][0]
-
             # рисуем на маске линии начала и конца изменения и закрашиваем область между ними
             cv.fillPoly(self._analyzedImg.mask, [pts], 255)
 
-            # iCluster += 1
 
-        if self._showStep:
-            plt.show()
+        if self._mutex is not None:
+            # fig = plt.gcf()
+            # self._sharedMemory = self._fig2img(fig)
+            self._sharedMemoryBuffer[:] = cv.cvtColor(tempImg, cv.COLOR_BGR2RGB)
+            self._mutex.release()
+            time.sleep(1)
+            self._mutex.acquire()
 
-        # self.distancesCurves = distancesOfCurves
-        # self.distancesCurvesVertical = distancesCurvesVertical
+
 
     def _segmentForDistribution(self, img, intensity):
         """
@@ -442,7 +565,7 @@ class EstimationTransitionLayer:
     def _segmentTransitionLayer(self):
         if self._analyzedImg.mask is None:
             self._analyzedImg.mask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
-            countComponentsObj = CountComponents(2, 3, True)
+            countComponentsObj = CountComponents(2, 3, self._showStep)
             countComponents = countComponentsObj(self._analyzedImg.field.flatten())
             if countComponents == 2:
                 self._analysisFieldWithTwoComponents()
@@ -455,8 +578,26 @@ class EstimationTransitionLayer:
             raise AttributeError("It is impossible to estimate width of transition layer in absence of image")
         if self._analyzedImg.field is None and self._analyzedImg.mask is None:
             self._calculateField()
+
+            # if self._mutex is not None:
+            #     self._sharedMemoryBuffer[:] = cv.cvtColor(self.fieldToImage(), cv.COLOR_GRAY2RGB)
+            #     self._mutex.release()
+            #     time.sleep(1)
+            #     self._mutex.acquire()
+
         if self._analyzedImg.mask is None:
             self._segmentTransitionLayer()
+
+            if self._showStep:
+                plt.imshow(self._analyzedImg.mask, cmap='gray')
+                plt.show()
+
+        if self._mutex is not None:
+            self._sharedMemoryBuffer[:] = cv.cvtColor(self._analyzedImg.mask, cv.COLOR_GRAY2RGB)
+            self._mutex.release()
+            time.sleep(1)
+            self._mutex.acquire()
+
         measurer = MeasureObjects(self._showStep)
         distances = measurer(self._analyzedImg.img, self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
 
@@ -464,6 +605,23 @@ class EstimationTransitionLayer:
         #     plt.hist(distances)
         #     plt.show()
 
-        result = EstimationTransitionLayer.CentralTendency[self._settings['Measure']['CentralTendency']](distances)
+        return distances
 
-        return result
+        # result = list(map(EstimationTransitionLayer.CentralTendency[self._settings['Measure']['CentralTendency']],
+        #                   distances))
+        #
+        # return result
+
+    def fieldToImage(self):
+        """
+        Перевод поля фрактальных размерностей в пространство оттенков серого
+
+        :param field: 2-D numpy массив
+            Поле фрактальных размерностей.
+
+        :return imgOut: 2-D numpy массив
+            Изображение-визуализация поля фрактальных размерностей
+        """
+        fieldConversionFunc = lambda x: int(255 * (x - 1) / 3) if x - 1.0 > 0.0 else 0
+        fieldImg = np.vectorize(fieldConversionFunc)(self._analyzedImg.field)
+        return fieldImg
