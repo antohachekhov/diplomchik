@@ -22,8 +22,21 @@ class CountComponents:
         self._showPlot = showPlot
 
     def __call__(self, data:np.ndarray) -> int:
-        counts, bins, _ = plt.hist(data, bins=250, facecolor=CountComponents.colors['0'],
-                                   edgecolor='none', density=True, label='ПФР')
+        # counts, bins, _ = plt.hist(data, bins=250, facecolor=CountComponents.colors['0'],
+        #                                edgecolor='none', density=True, label='ПФР')
+        maxValue = np.amax(data)
+        minValue = np.amin(data)
+        step = (maxValue - minValue) / 250
+        bins = [minValue + step * i for i in range(250)]
+        counts = np.bincount(np.digitize(data, bins[1:])) / data.shape[0] / step
+        # frequency = counts / data.shape[0] / step
+        # counts = frequency
+        bins = np.asarray(bins)
+
+        if self._showPlot:
+            plt.hist(data, bins, facecolor=CountComponents.colors['0'], edgecolor='none', density=True, label='ПФР')
+            plt.scatter(bins, counts, s=3, c='red', marker='x')
+
         chiSquares = []
         for curCount in range(self._minCount, self._maxCount + 1):
             X = np.expand_dims(data, 1)
@@ -31,7 +44,8 @@ class CountComponents:
             model.fit(X)
             mu = model.means_
             sigma = model.covariances_
-            x = (bins[1:] + bins[:-1]) / 2.
+            x = bins
+            # x = (bins[1:] + bins[:-1]) / 2.
             densityFuncValues = np.zeros(x.shape)
             for i in range(curCount):
                 densityFuncValues += model.weights_[i] * stats.norm.pdf(x, mu[i][0], sqrt(sigma[i][0][0]))
