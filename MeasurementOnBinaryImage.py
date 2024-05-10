@@ -31,40 +31,8 @@ class MeasureObjects:
         """
         return sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-    def __call__(self, image, mask:np.ndarray, borderSize:int=0):
+    def __call__(self, mask:np.ndarray, borderSize:int=0):
         contours, hierarchy = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
-
-        # if self._showStep:
-        #     index = 0
-        #     layer = 0
-        #
-        #     def update():
-        #         vis = image.copy()
-        #         cv.drawContours(vis, contours, index, (150, 0, 0), 2, cv.LINE_AA, hierarchy, layer)
-        #         cv.imshow('contours', vis)
-        #
-        #     def update_index(v):
-        #         global index
-        #         index = v - 1
-        #         update()
-        #
-        #     def update_layer(v):
-        #         global layer
-        #         layer = v
-        #         update()
-        #
-        #     update_index(0)
-        #     update_layer(0)
-        #     cv.createTrackbar("contour", "contours", 0, 7, update_index)
-        #     cv.createTrackbar("layers", "contours", 0, 7, update_layer)
-        #
-        #     cv.waitKey()
-        #     cv.destroyAllWindows()
-        #
-        #     for i in range(len(contours)):
-        #         if hierarchy[0, i, 3] == -1:
-        #             plt.plot(contours[i][:, 0, 0], contours[i][:, 0, 1])
-        #     plt.show()
 
         measurementsObjects = []
 

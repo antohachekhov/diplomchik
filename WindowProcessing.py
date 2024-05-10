@@ -16,7 +16,7 @@ class WindowProcessing:
         self._winSize = kwargs.get('windowSize', 32)
         self._dx = kwargs.get('X-axisStep', 1)
         self._dy = kwargs.get('Y-axisStep', 1)
-        self._parallelComputing = kwargs.get('parallelComputing', 2)
+        self._parallelComputing = kwargs.get('parallelComputing', False)
 
     def _generateWindows(self, img):
         """

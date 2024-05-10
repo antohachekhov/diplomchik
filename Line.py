@@ -21,7 +21,7 @@ class Line:
         self.b = b
         self.c = c
 
-    def __call__(self, x, *args, **kwargs):
+    def __call__(self, x):
         """
         Возвращает значение y прямой при заданной координате x
 

@@ -213,13 +213,13 @@ class EstimationTransitionLayer:
             extr = np.append(extr, [i])
         return ampl, extr
 
-    @staticmethod
-    def _fig2img(fig):
-        buf = io.BytesIO()
-        fig.savefig(buf)
-        buf.seek(0)
-        img = PILImage.open(buf)
-        return img
+    # @staticmethod
+    # def _fig2img(fig):
+    #     buf = io.BytesIO()
+    #     fig.savefig(buf)
+    #     buf.seek(0)
+    #     img = PILImage.open(buf)
+    #     return img
 
     def _analysisFieldWithTwoComponents(self):
         """
@@ -599,7 +599,7 @@ class EstimationTransitionLayer:
             self._mutex.acquire()
 
         measurer = MeasureObjects(self._showStep)
-        distances = measurer(self._analyzedImg.img, self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
+        distances = measurer(self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
 
         # if self._showStep:
         #     plt.hist(distances)
@@ -612,16 +612,16 @@ class EstimationTransitionLayer:
         #
         # return result
 
-    def fieldToImage(self):
-        """
-        Перевод поля фрактальных размерностей в пространство оттенков серого
-
-        :param field: 2-D numpy массив
-            Поле фрактальных размерностей.
-
-        :return imgOut: 2-D numpy массив
-            Изображение-визуализация поля фрактальных размерностей
-        """
-        fieldConversionFunc = lambda x: int(255 * (x - 1) / 3) if x - 1.0 > 0.0 else 0
-        fieldImg = np.vectorize(fieldConversionFunc)(self._analyzedImg.field)
-        return fieldImg
+    # def fieldToImage(self):
+    #     """
+    #     Перевод поля фрактальных размерностей в пространство оттенков серого
+    #
+    #     :param field: 2-D numpy массив
+    #         Поле фрактальных размерностей.
+    #
+    #     :return imgOut: 2-D numpy массив
+    #         Изображение-визуализация поля фрактальных размерностей
+    #     """
+    #     fieldConversionFunc = lambda x: int(255 * (x - 1) / 3) if x - 1.0 > 0.0 else 0
+    #     fieldImg = np.vectorize(fieldConversionFunc)(self._analyzedImg.field)
+    #     return fieldImg
