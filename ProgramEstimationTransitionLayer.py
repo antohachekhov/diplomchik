@@ -221,6 +221,88 @@ class EstimationTransitionLayer:
             extr = np.append(extr, [i])
         return ampl, extr
 
+    def _findExtrWithDiff(self, data):
+        """
+        Поиск локальных экстремумов и величин изменения между ними
+
+        :param data: 1-D numpy массив.
+            Массив, в котором необходимо найти экстремумы
+
+        :return ampl : 1-D numpy массив.
+            Массив значений изменения значения переменной между локальными экстремумами
+
+        :return extr : 1-D numpy массив.
+            Массив координат локальных экстремумов
+        """
+        extr = np.empty(0, dtype=np.uint32)
+        ampl = np.empty(0, dtype=np.float64)
+
+        A = np.empty(0, dtype=np.uint32)
+        B = np.empty(0, dtype=np.uint32)
+
+        i = 0
+
+        # флаг-переменная. Истина, если впереди локальный максимум
+        toMax = False
+
+        # проход по значениям, пока значения не станут изменяться
+        while data[i + 1] == data[i] and i + 1 != data.size:
+            i += 1
+
+        # начало изменения заносится в массив экстремумов
+        extr = np.append(extr, [i])
+
+        if i + 1 != data.size:
+            # если следующее значение больше
+            if data[i + 1] > data[i]:
+                # впереди локальный максимум
+                toMax = True
+            else:
+                # иначе локальный минимум
+                toMax = False
+
+        findMax = False
+
+        # пока не достигнут конец массива
+        while i + 1 != data.size:
+            # если впереди локальный максимум
+            if toMax:
+                # проход по значениям, пока значения не начнут уменьшатся
+                while i + 1 != data.size and data[i + 1] >= data[i]:
+                    i += 1
+                # если значения уменьшаются, впереди локальный минимум
+                toMax = False
+                if findMax:
+                    B = np.append(B, [i])
+                    findMax = False
+            else:
+                # проход вперёд, пока значения не начнут увеличиваться
+                while i + 1 != data.size and data[i + 1] <= data[i]:
+                    i += 1
+                # если значения увеличиваются, впереди локальный максимум
+                toMax = True
+
+            curDiff = abs(data[i] - data[extr[-1]])
+
+            if curDiff >= self._settings['AnalysisOfFieldWithTwoComponents']['minChangeFractalDimensionOfTwoTextures']:
+                if not toMax:
+                    if len(extr) >= 2:
+                        B = np.append(B, [extr[-2]])
+                        A = np.append(A, [i])
+                else:
+                    A = np.append(A, [extr[-1]])
+                    findMax = True
+
+            # разность между локальными экстремумами заносится в массив величин изменений
+            ampl = np.append(ampl, [abs(data[i] - data[extr[-1]])])
+            # координата найденного локального экстремума заносится в массив координат
+            extr = np.append(extr, [i])
+
+        if findMax:
+            A = A[:-1]
+
+        return ampl, extr, A, B
+
     def _putInSharedMemory(self, data, description: str = None):
         self._sharedMemoryBuffer[:] = data
         print(f'{threading.current_thread().name} положил в ОП{' ' + description if description else ''}')
@@ -249,44 +331,69 @@ class EstimationTransitionLayer:
             filterSlice = medfilt(sliceOfField,
                                   kernel_size=self._settings['AnalysisOfFieldWithTwoComponents']['widthOfMedianKernel'])
 
-            # координаты локальных экстремумов и разность значений между ними
-            amplMF, extrMF = self._findExtr(filterSlice)
+            # # координаты локальных экстремумов и разность значений между ними
+            # amplMF, extrMF = self._findExtr(filterSlice)
+            #
+            # # Выделение областей, в которых разность между экстремумами больше,
+            # # чем величина изменения фрактальной размерности на границе двух текстур
+            # indexPeak = np.where(
+            #     amplMF > self._settings['AnalysisOfFieldWithTwoComponents']['minChangeFractalDimensionOfTwoTextures'])
+            # if indexPeak[0].size > 0:
+            #     for j in indexPeak[0]:
+            #         # области на границе изображения не берутся во внимание,
+            #         # так как на границах поле искажено
+            #         if j != 0 and j < extrMF.shape[0] - 1:
+            #             if 0 < extrMF[j] < self._analyzedImg.field.shape[
+            #                 self._settings['AnalysisOfFieldWithTwoComponents']['columnarAnalysis']] - 1 and extrMF[
+            #                 j + 1] < self._analyzedImg.field.shape[
+            #                 self._settings['AnalysisOfFieldWithTwoComponents']['columnarAnalysis']] - 1:
+            #                 changeBegin = np.vstack([changeBegin, np.array([n, extrMF[j]])])
+            #                 changeEnd = np.vstack([changeEnd, np.array([n, extrMF[j + 1]])])
 
-            # Выделение областей, в которых разность между экстремумами больше,
-            # чем величина изменения фрактальной размерности на границе двух текстур
-            indexPeak = np.where(
-                amplMF > self._settings['AnalysisOfFieldWithTwoComponents']['minChangeFractalDimensionOfTwoTextures'])
-            if indexPeak[0].size > 0:
-                for j in indexPeak[0]:
-                    # области на границе изображения не берутся во внимание,
-                    # так как на границах поле искажено
-                    if j != 0 and j < extrMF.shape[0] - 1:
-                        if 0 < extrMF[j] < self._analyzedImg.field.shape[
-                            self._settings['AnalysisOfFieldWithTwoComponents']['columnarAnalysis']] - 1 and extrMF[
-                            j + 1] < self._analyzedImg.field.shape[
-                            self._settings['AnalysisOfFieldWithTwoComponents']['columnarAnalysis']] - 1:
-                            changeBegin = np.vstack([changeBegin, np.array([n, extrMF[j]])])
-                            changeEnd = np.vstack([changeEnd, np.array([n, extrMF[j + 1]])])
+            _, _, A, B = self._findExtrWithDiff(filterSlice)
+            for a, b in zip(A, B):
+                changeBegin = np.vstack([changeBegin, np.array([n, a])])
+                changeEnd = np.vstack([changeEnd, np.array([n, b])])
 
         changeBegin = np.delete(changeBegin, 0, axis=0)
         changeEnd = np.delete(changeEnd, 0, axis=0)
 
         # перевод точек поля в размерность изображения
-        for point in changeBegin:
-            point[0] = int(
-                point[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+
+        radius = int(self._settings['WindowProcessing'][
+                    'windowSize'] + (2 ** self._settings['WindowProcessing']['numberWindowDivides'] - 1)) / 2 ** self._settings['WindowProcessing']['numberWindowDivides']
+        for point1, point2 in zip(changeBegin, changeEnd):
+            point1[0] = int(point1[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
                     'windowSize'] / 2)
-            point[1] = int(
-                point[1] * self._settings['WindowProcessing']['Y-axisStep'] + self._settings['WindowProcessing'][
+            point2[0] = int(point2[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
                     'windowSize'] / 2)
 
-        for point in changeEnd:
-            point[0] = int(
-                point[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
-                    'windowSize'] / 2)
-            point[1] = int(
-                point[1] * self._settings['WindowProcessing']['Y-axisStep'] + self._settings['WindowProcessing'][
-                    'windowSize'] / 2)
+            if point1[1] < point2[1]:
+                point1[1] = int(point1[1] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+                    'windowSize'] / 2) + radius
+                point2[1] = int(point2[1] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+                    'windowSize'] / 2) - radius
+            else:
+                point1[1] = int(point1[1] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+                    'windowSize'] / 2) - radius
+                point2[1] = int(point2[1] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+                    'windowSize'] / 2) + radius
+
+        # for point in changeBegin:
+        #     point[0] = int(
+        #         point[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+        #             'windowSize'] / 2)
+        #     point[1] = int(
+        #         point[1] * self._settings['WindowProcessing']['Y-axisStep'] + self._settings['WindowProcessing'][
+        #             'windowSize'] / 2)
+        #
+        # for point in changeEnd:
+        #     point[0] = int(
+        #         point[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
+        #             'windowSize'] / 2)
+        #     point[1] = int(
+        #         point[1] * self._settings['WindowProcessing']['Y-axisStep'] + self._settings['WindowProcessing'][
+        #             'windowSize'] / 2)
 
         if self._showStep:
             plt.imshow(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB))
@@ -299,7 +406,7 @@ class EstimationTransitionLayer:
             tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
             for b, e in zip(changeBegin, changeEnd):
                 tempImg = cv.circle(tempImg, (b[0], b[1]), radius=3, color=(0, 0, 255), thickness=-1)
-                tempImg = cv.circle(tempImg, (e[0], e[1]), radius=3, color=(0, 0, 255), thickness=-1)
+                tempImg = cv.circle(tempImg, (e[0], e[1]), radius=3, color=(0, 255, 255), thickness=-1)
             self._putInSharedMemory(cv.cvtColor(tempImg, cv.COLOR_BGR2RGB), 'распределение точек А и В')
 
         self._logging('Шаг 4/8 (алгоритм 1): DBSCAN-кластеризация')
@@ -524,18 +631,25 @@ class EstimationTransitionLayer:
 
         self._logging('Шаг 7/8 (алгоритм 2): Морфологическая операция Дилатация')
         # наращивание объектов
-        radius = int(self._settings['WindowProcessing']['windowSize'] / 2 if self._settings['WindowProcessing'][
-                                                                                 'windowSize'] / 2 % 2 == 1 else
-                     self._settings['WindowProcessing']['windowSize'] / 2 - 1)
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (radius, radius))
-        maskAfterDilate = cv.dilate(maskAfterFilter, kernel)
+        # radius = int(self._settings['WindowProcessing']['windowSize'] / 2 if self._settings['WindowProcessing'][
+        #                                                                          'windowSize'] / 2 % 2 == 1 else
+        #              self._settings['WindowProcessing']['windowSize'] / 2 - 1)
+        # kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (radius, radius))
+        # maskAfterDilate = cv.dilate(maskAfterFilter, kernel)
+        radius = int(self._settings['WindowProcessing']['windowSize'] / 3 if self._settings['WindowProcessing'][
+                                                                                 'windowSize'] / 3 % 2 == 1 else
+                     self._settings['WindowProcessing']['windowSize'] / 3 - 1)
+        radius = int(self._settings['WindowProcessing']['windowSize'] if self._settings['WindowProcessing'][
+                                                                                  'windowSize'] % 2 == 1 else
+                      self._settings['WindowProcessing']['windowSize'] - 1)
+        maskAfterBlur = cv.GaussianBlur(maskAfterFilter, (radius, radius), 0)
 
         if self._mutex is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
             int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
-                self._settings['WindowProcessing']['windowSize'] / 2) + 1] = maskAfterDilate
+                self._settings['WindowProcessing']['windowSize'] / 2) + 1] = maskAfterBlur
             self._putInSharedMemory(self._maskOnImage(tempMask), 'результат операции Дилатация')
 
         if self._showStep:
@@ -570,14 +684,14 @@ class EstimationTransitionLayer:
             plt.yticks([])
 
             plt.subplot(2, 3, 6)
-            plt.imshow(maskAfterDilate, cmap='gray')
+            plt.imshow(maskAfterBlur, cmap='gray')
             plt.title('Blur&Thresh')
             plt.xticks([])
             plt.yticks([])
 
             plt.show()
 
-        return maskAfterDilate
+        return maskAfterBlur
 
     def _analysisFieldWithThreeComponents(self):
         """

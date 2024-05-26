@@ -95,6 +95,8 @@ class InterfaceProgram:
             # print(np.median(list(itertools.chain(*result))))
             print(f'{threading.current_thread().name} Отправляю результаты')
             self.signalForResult.emit(result)
+            with open('result.txt', 'w') as outfile:
+                outfile.write(str(result))
             # self.signalForCurrentStep.emit('\n'.join(resultsStr))
             print(f'{threading.current_thread().name} Заканчиваю')
             return True
@@ -147,6 +149,7 @@ def inputField(path: str):
 imageName = None
 fieldPath = None
 # imageName = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\1-11.tif"
-fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
+# fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
 # fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_field_prism_w30x1y1.csv"
+fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-34\field_filt_w30.csv"
 
