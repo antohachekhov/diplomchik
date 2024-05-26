@@ -15,7 +15,7 @@ from PyQt5.QtGui import QImage, QPixmap
 
 class InterfaceProgram:
 
-    def __init__(self, signalForImage, signalForCurrentStep):
+    def __init__(self, signalForImage, signalForCurrentStep, signalForResult):
         self.image = None
         self.mutex = threading.Lock()
         self.nameSharedMemory = 'curImage'
@@ -25,6 +25,7 @@ class InterfaceProgram:
         self.threadShow = None
         self.signalForImage = signalForImage
         self.signalForCurrentStep = signalForCurrentStep
+        self.signalForResult = signalForResult
         self.scaleCoef = None
         self.unit = 'pixel'
 
@@ -84,16 +85,17 @@ class InterfaceProgram:
                                                                 self.signalForCurrentStep)
             print(f'{threading.current_thread().name} Получены результаты')
             self.estimation.clear()
-            results = [np.median(obj) for obj in result]
-            results.append(np.median(list(itertools.chain(*result))))
-            if self.scaleCoef is not None:
-                resultsStr = [str(val * self.scaleCoef) + self.unit for val in results]
-            for i, val in enumerate(resultsStr[:-1]):
-                resultsStr[i] = f'Объект {i + 1}: ' + val
-            resultsStr[-1] = 'Общее значение: ' + resultsStr[-1]
-            print(np.median(list(itertools.chain(*result))))
+            # results = [np.median(obj) for obj in result]
+            # results.append(np.median(list(itertools.chain(*result))))
+            # if self.scaleCoef is not None:
+            #     resultsStr = [str(val * self.scaleCoef) + self.unit for val in results]
+            # for i, val in enumerate(resultsStr[:-1]):
+            #     resultsStr[i] = f'Объект {i + 1}: ' + val
+            # resultsStr[-1] = 'Общее значение: ' + resultsStr[-1]
+            # print(np.median(list(itertools.chain(*result))))
             print(f'{threading.current_thread().name} Отправляю результаты')
-            self.signalForCurrentStep.emit('\n'.join(resultsStr))
+            self.signalForResult.emit(result)
+            # self.signalForCurrentStep.emit('\n'.join(resultsStr))
             print(f'{threading.current_thread().name} Заканчиваю')
             return True
         except Exception as e:
@@ -145,6 +147,6 @@ def inputField(path: str):
 imageName = None
 fieldPath = None
 # imageName = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\1-11.tif"
-# fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
-fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_field_prism_w30x1y1.csv"
+fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
+# fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_field_prism_w30x1y1.csv"
 

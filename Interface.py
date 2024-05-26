@@ -2,6 +2,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QTextEdit
 from mainProgram import InterfaceProgram
+import numpy as np
+import itertools
 
 styleSheets = """
     QPushButton#changePage {
@@ -9,42 +11,42 @@ styleSheets = """
         border-radius: 10px;
         border: 1px solid #8ED6FF;
     }
-    
+
     QPushButton#changePage:hover {
         border: 2px solid #8ED6FF;
         background-color: #E6F6FF;
     }
-    
+
     QPushButton#changePage:pressed {
         background-color: #8ED6FF;
     }
-    
+
     QLabel#image { 
         background-color: #E6F6FF;
     }
-    
+
     QMainWindow {
         background-color: white;
     }
-    
+
     QPushButton#button {
         background-color: #8ED6FF;
         color: black;
         border-radius: 12px;
     }
-    
+
     QPushButton#button:hover {
         background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8ED6FF,stop:1 #1AACFF);
     }
-    
+
     QPushButton#button:pressed {
         background-color: #1AACFF;
     }
-    
+
     QPushButton#button:disabled {
         background-color: #C7C7C7;
     }
-    
+
     QTextEdit#textField {
         border: 1px solid #8ED6FF;
     }
@@ -61,6 +63,7 @@ class PageWindow(QtWidgets.QMainWindow):
 class MainWindow(PageWindow):
     signalToChangeImage = QtCore.pyqtSignal(QtGui.QImage)
     signalStepOfAnalysis = QtCore.pyqtSignal(str)
+    signalResult = QtCore.pyqtSignal(list)
 
     def __init__(self):
         super().__init__()
@@ -68,7 +71,9 @@ class MainWindow(PageWindow):
         self.setWindowTitle("Измерение переходного слоя")
         self.signalToChangeImage.connect(self.changeImage)
         self.signalStepOfAnalysis.connect(self.putResultsOnTextField)
-        self.program = InterfaceProgram(self.signalToChangeImage, self.signalStepOfAnalysis)
+        self.signalResult.connect(self.processingResult)
+        self.currentResults = None
+        self.program = InterfaceProgram(self.signalToChangeImage, self.signalStepOfAnalysis, self.signalResult)
 
     def changeImage(self, image):
         qPixmap = QPixmap.fromImage(image).scaledToHeight(self.image.height())
@@ -77,6 +82,52 @@ class MainWindow(PageWindow):
     def putResultsOnTextField(self, message):
         self.textField.setText(message)
 
+    def processingResult(self, results):
+        self.currentResults = results
+        self.showResultTable()
+        self.calculateTotalValue([True] * len(self.currentResults))
+        self.clear.setEnabled(True)
+
+    def checkBoxChanged(self):
+        flags = [True] * len(self.currentResults)
+        for i in range(self.table.rowCount()):
+            flags[i] = self.table.cellWidget(i, 0).isChecked()
+        self.calculateTotalValue(flags)
+
+    def calculateTotalValue(self, flags):
+        if any(flags):
+            valuesForTotalValue = []
+            for i, values in enumerate(self.currentResults):
+                if flags[i]:
+                    valuesForTotalValue.append(values)
+            median = np.median(list(itertools.chain(*valuesForTotalValue)))
+            if self.program.scaleCoef:
+                median *= self.program.scaleCoef
+            strValue = f"{median:.4g}"
+            strValue += ' ' + self.program.unit
+            self.resultField.setText(strValue)
+        else:
+            self.resultField.setText(str('Не выбрано ни одного объекта'))
+
+    def showResultTable(self):
+        self.table.setRowCount(len(self.currentResults))
+        for row in range(self.table.rowCount()):
+            # item1 = QtWidgets.QTableWidgetItem()
+            # item1.setFlags(QtCore.Qt.ItemFlag.ItemIsUserCheckable | QtCore.Qt.ItemFlag.ItemIsEnabled)
+            # item1.setCheckState(QtCore.Qt.CheckState.Checked)
+            # self.table.setItem(row, 0, item1)
+            checkBox = QtWidgets.QCheckBox(parent=self.table)
+            checkBox.setChecked(True)
+            checkBox.clicked.connect(self.checkBoxChanged)
+            self.table.setCellWidget(row, 0, checkBox)
+            if self.program.scaleCoef:
+                valueCell = f"{np.median(self.currentResults[row]) * self.program.scaleCoef:.4g} {self.program.unit}"
+            else:
+                valueCell = f"{np.median(self.currentResults[row]):.4g} {self.program.unit}"
+            cell = QtWidgets.QTableWidgetItem(valueCell)
+            self.table.setItem(row, 1, cell)
+        self.table.resizeColumnsToContents()
+
     def initUI(self):
         self.UiComponents()
 
@@ -84,46 +135,57 @@ class MainWindow(PageWindow):
         self.settingsButton = QPushButton("Настройки", self)
         self.settingsButton.setGeometry(QtCore.QRect(5, 5, 150, 30))
         self.settingsButton.setObjectName('changePage')
-        self.settingsButton.clicked.connect(
-            self.make_handleButton("settingsButton")
-        )
+        self.settingsButton.clicked.connect(self.make_handleButton("settingsButton"))
 
         self.image = QLabel(self)
         self.image.setObjectName('image')
-        self.image.setGeometry(QtCore.QRect(89, 50, 768, 500))
+        self.image.setGeometry(QtCore.QRect(24, 50, 768, 500))
 
         self.buttonInput = QPushButton("Загрузить изображение", self.image)
         self.buttonInput.setObjectName('button')
-        self.buttonInput.setGeometry(301, 230, 167, 39)
+        self.buttonInput.setGeometry(300, 230, 167, 39)
         self.buttonInput.clicked.connect(self.inputImage)
 
+        self.textFieldLabel = QLabel("Статус анализа", self)
+        self.textFieldLabel.setObjectName('label')
+        self.textFieldLabel.setGeometry(24, 552, 768, 18)
+
         self.textField = QTextEdit(self)
-        self.textField.setGeometry(89, 561, 768, 60)
+        self.textField.setGeometry(24, 570, 768, 60)
         self.textField.setObjectName('textField')
         self.textField.setReadOnly(True)
         self.textField.setText(
             'Привет, мир!\nПривет, Никита!\nПривет, мир!\nПривет, Никита!\nПривет, мир!\nПривет, Никита!')
 
         self.startButton = QPushButton('Начать анализ', self)
-        self.startButton.setGeometry(296, 640, 167, 35)
+        self.startButton.setGeometry(231, 640, 167, 35)
         self.startButton.setObjectName('button')
         self.startButton.setEnabled(False)
         self.startButton.clicked.connect(self.startAnalysis)
 
         self.clear = QPushButton('Очистить', self)
-        self.clear.setGeometry(483, 640, 167, 35)
+        self.clear.setGeometry(418, 640, 167, 35)
         self.clear.setObjectName('button')
         self.clear.setEnabled(False)
         self.clear.clicked.connect(self.clearClick)
-        #pixmap = QPixmap('test.jpg').scaledToHeight(500)
-        #self.image.setPixmap(pixmap)
-        # self.setCentralWidget(self.image)
-        # self.image.move(70, 84)
 
-        # container = QtWidgets.QVBoxLayout()
-        # container.addWidget(self.settingsButton)
-        # container.addWidget(self.image)
-        # self.setLayout(container)
+        # self.layoutTable = QtWidgets.QVBoxLayout()
+        # self.setLayout(self.layoutTable)
+        # self.layoutTable.setGeometry(QtCore.QRect(24, 50, 768, 500))
+        self.table = QtWidgets.QTableWidget(self)
+        self.table.setColumnCount(2)  # Set three columns
+        self.table.setRowCount(3)
+        self.table.setGeometry(QtCore.QRect(813, 50, 203, 500))
+
+        self.resultLabel = QLabel("Общее значение", self)
+        self.resultLabel.setObjectName('label')
+        self.resultLabel.setGeometry(813, 552, 203, 18)
+
+        self.resultField = QTextEdit(self)
+        self.resultField.setGeometry(813, 570, 203, 60)
+        self.resultField.setObjectName('textField')
+        self.resultField.setReadOnly(True)
+        self.resultField.setText('')
 
     def inputImage(self):
         fileName = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Image", "./", "*.tif")[0]
@@ -140,9 +202,14 @@ class MainWindow(PageWindow):
         self.startButton.setEnabled(False)
         self.clear.setEnabled(False)
         self.textField.clear()
+        self.currentResults = None
+        self.table.clear()
+        self.resultField.clear()
 
     def startAnalysis(self):
         self.program.estimate()
+        self.startButton.setEnabled(False)
+        self.clear.setEnabled(False)
 
     def make_handleButton(self, button):
         def handleButton():
@@ -175,7 +242,7 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setFixedSize(945, 715)
+        self.setFixedSize(1040, 715)
 
         self.stacked_widget = QtWidgets.QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
