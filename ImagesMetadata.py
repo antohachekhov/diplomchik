@@ -1,6 +1,9 @@
+from typing import Tuple, Any
+
 from PIL import Image as PILImage
 
-def getScale(imageName:str) -> float:
+
+def getScale(imageName: str) -> float:
     exifData = PILImage.open(imageName).getexif()
     tags = exifData.items()._mapping[34118]
 
@@ -23,4 +26,4 @@ def getScale(imageName:str) -> float:
     width_value = float(width_str[0]) * measurementDict[width_unit[0]]
     ScaleCoef = width_value / float(exifData.items()._mapping[256])
 
-    return ScaleCoef
+    return ScaleCoef, width_unit[0]

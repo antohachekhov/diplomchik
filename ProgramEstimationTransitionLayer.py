@@ -662,6 +662,36 @@ class EstimationTransitionLayer:
         result = cv.cvtColor(result, cv.COLOR_BGR2RGB)
         return result
 
+    def _maskOnImageWithNumber(self, contours):
+        imgRGB = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB)
+        result = imgRGB
+        for i, contour in enumerate(contours):
+            mask = np.zeros(imgRGB.shape, dtype=np.uint8)
+            mask = cv.fillPoly(mask, [contour], (255, 255, 255))
+            mask = cv.cvtColor(mask, cv.COLOR_RGB2GRAY)
+
+            # создание слоя-заливки
+            color_layer = np.zeros(imgRGB.shape, dtype=np.uint8)
+            color_layer[:] = self.Colors[i]
+
+            # наложение заливки на изображение через маску
+            # получаются закрашенные сегменты переходного слоя
+            stratum = cv.bitwise_and(imgRGB, color_layer, mask=mask)
+            # соединение исходного изображения с полупрозрачными закрашенными сегментами
+            tempResult = cv.addWeighted(result, 1, stratum, 0.2, 0.0)
+            # выделение контуров сегментов
+            cv.drawContours(tempResult, [contour], -1, self.Colors[i], 2, cv.LINE_AA)
+            radius = 15
+            centre = contour[int(len(contour) / 2)][0]
+            tempResult = cv.circle(tempResult, centre, radius, self.Colors[i], -1)
+            tempResult = cv.putText(tempResult, str(i + 1),
+                                    (centre[0] - radius + int(radius / 3), centre[1] + radius - int(radius / 3)),
+                                    cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            # перевод результата в пространство RGB
+            result = cv.cvtColor(tempResult, cv.COLOR_BGR2RGB)
+
+        return result
+
     def _segmentTransitionLayer(self):
         if self._analyzedImg.mask is None:
             self._logging('Шаг 2/8: Определение количества компонент в смеси')
@@ -682,11 +712,11 @@ class EstimationTransitionLayer:
 
         if mutex is not None and sharedMemoryName is not None:
             self._mutex = mutex
-            print(f'{threading.current_thread().name} ожидает доступ к ресурсу')
+            print(f'{threading.current_thread().name} ожидает доступ к ресурсу для первого подключения')
             self._mutex.acquire()
-            print(f'{threading.current_thread().name} получил доступ к ресурсу')
+            print(f'{threading.current_thread().name} получил доступ к ресурсу для первого подключения')
             self._sharedMemory = SharedMemory(name=sharedMemoryName, create=False)
-            print('Подключение к общей памяти прошло успешно')
+            print(f'{threading.current_thread().name} Подключение к общей памяти прошло успешно')
             self._sharedMemoryBuffer = np.ndarray(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB).shape,
                                                   dtype=np.uint8, buffer=self._sharedMemory.buf)
 
@@ -702,18 +732,22 @@ class EstimationTransitionLayer:
             plt.imshow(self._analyzedImg.mask, cmap='gray')
             plt.show()
 
+        self._logging('Шаг 8/8: Оценка ширины выделенных сегментов')
+        measurer = MeasureObjects(self._showStep)
+        distances, contours = measurer(self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
+
+        if self._mutex is not None:
+            self._putInSharedMemory(self._maskOnImageWithNumber(contours), 'нумерация объектов')
+
         if self._mutex is not None:
             self._sharedMemory.close()
             self._sharedMemory.unlink()
             self._mutex.release()
+            self._mutex = None
             print(f'{threading.current_thread().name} освободил ресурс')
-
-        self._logging('Шаг 8/8: Оценка ширины выделенных сегментов')
-        measurer = MeasureObjects(self._showStep)
-        distances = measurer(self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
 
         if self._showStep:
             plt.hist(distances)
             plt.show()
 
-        return distances, self._analyzedImg.mask
+        return distances

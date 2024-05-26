@@ -37,9 +37,11 @@ class MeasureObjects:
         measurementsObjects = []
 
         # цикл по каждому объекту
-        for contourObject in contours:
-            measurementsObjects.append(self._measureObject(contourObject, mask.shape, borderSize))
-        return measurementsObjects
+        for contourObject, hierarchyObject in zip(contours, hierarchy[0]):
+            if hierarchyObject[-1] == -1:
+                measurementsObjects.append(self._measureObject(contourObject, mask.shape, borderSize))
+
+        return measurementsObjects, contours
 
     @staticmethod
     def _differentiation(data, center, left, right):
@@ -248,11 +250,13 @@ class MeasureObjects:
                 if left == -1:
                     raise Exception("It is impossible to construct a normal")
                 else:
-                    distances.append(self._findIntersectionWithNormalFromPoint(contourObjectFiltered,
-                                                                               indexPoint,
-                                                                               derivative=self._differentiation(contourObject,
-                                                                                                                indexPoint,
-                                                                                                                left, right)))
+                    distance = self._findIntersectionWithNormalFromPoint(contourObjectFiltered,
+                                                              indexPoint,
+                                                              derivative=self._differentiation(contourObject,
+                                                                                               indexPoint,
+                                                                                               left, right))
+                    if distance is not None:
+                        distances.append(distance)
             except:
                 continue
         return distances

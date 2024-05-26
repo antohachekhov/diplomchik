@@ -67,14 +67,14 @@ class MainWindow(PageWindow):
         self.initUI()
         self.setWindowTitle("Измерение переходного слоя")
         self.signalToChangeImage.connect(self.changeImage)
-        self.signalStepOfAnalysis.connect(self.changeTextField)
+        self.signalStepOfAnalysis.connect(self.putResultsOnTextField)
         self.program = InterfaceProgram(self.signalToChangeImage, self.signalStepOfAnalysis)
 
     def changeImage(self, image):
         qPixmap = QPixmap.fromImage(image).scaledToHeight(self.image.height())
         self.image.setPixmap(qPixmap)
 
-    def changeTextField(self, message):
+    def putResultsOnTextField(self, message):
         self.textField.setText(message)
 
     def initUI(self):
@@ -139,6 +139,7 @@ class MainWindow(PageWindow):
         self.buttonInput.show()
         self.startButton.setEnabled(False)
         self.clear.setEnabled(False)
+        self.textField.clear()
 
     def startAnalysis(self):
         self.program.estimate()
