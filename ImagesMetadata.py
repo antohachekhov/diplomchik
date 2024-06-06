@@ -8,11 +8,6 @@ def getScale(imageName: str) -> float:
     tags = exifData.items()._mapping[34118]
 
     width = 0.
-    measurementDict = {
-        "m": 1E-3,
-        "µ": 1E-6,
-        "n": 1E-9,
-    }
 
     for row in tags.split("\r\n"):
         key_value = row.split(" = ")
@@ -23,7 +18,7 @@ def getScale(imageName: str) -> float:
     width_str = width.split(" ")
 
     width_unit = width_str[1]
-    width_value = float(width_str[0]) * measurementDict[width_unit[0]]
+    width_value = float(width_str[0]) # * measurementDict[width_unit[0]]
     ScaleCoef = width_value / float(exifData.items()._mapping[256])
 
     return ScaleCoef, width_unit[0]
