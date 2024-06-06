@@ -1,9 +1,11 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QTextEdit
-from mainProgram import InterfaceProgram
+import sys
 import numpy as np
-import itertools
+import multiprocessing
+
+from PyQt5.QtGui import QPixmap
+from mainProgram import InterfaceProgram
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QLabel, QPushButton, QTextEdit
 
 styleSheets = """
     QPushButton#changePage {
@@ -54,6 +56,9 @@ styleSheets = """
 
 
 class PageWindow(QtWidgets.QMainWindow):
+    """
+    Класс страницы окна
+    """
     gotoSignal = QtCore.pyqtSignal(str)
 
     def goto(self, name):
@@ -61,81 +66,58 @@ class PageWindow(QtWidgets.QMainWindow):
 
 
 class MainWindow(PageWindow):
+    """
+    Класс главного окна
+    """
+
+    class TableOfResults(QtWidgets.QTableWidget):
+        """
+        Класс таблицы результатов
+        """
+
+        def __init__(self, parent=None, slotForChange=None):
+            super().__init__(parent)
+            self.slotForChange = slotForChange
+            self.setColumnCount(2)
+            self.setRowCount(3)
+
+        def showResult(self, results):
+            """
+            Отображение результатов
+            """
+            self.setRowCount(len(results.result))
+            for row in range(self.rowCount()):
+                checkBox = QtWidgets.QCheckBox(self)
+                checkBox.setChecked(True)
+                if self.slotForChange is not None:
+                    checkBox.clicked.connect(self.slotForChange)
+                self.setCellWidget(row, 0, checkBox)
+                valueCell = f"{np.median(results.result[row]) * results.scaleCoef:.4g} {results.unit if results.unit is not None else 'pixels'}"
+                cell = QtWidgets.QTableWidgetItem(valueCell)
+                self.setItem(row, 1, cell)
+            self.resizeColumnsToContents()
+
     signalToChangeImage = QtCore.pyqtSignal(QtGui.QImage)
     signalStepOfAnalysis = QtCore.pyqtSignal(str)
-    signalResult = QtCore.pyqtSignal(list)
+    signalResult = QtCore.pyqtSignal(bool)
 
     def __init__(self):
+        """
+        Конструктор класса
+        """
         super().__init__()
         self.initUI()
+        self.initLogic()
         self.setWindowTitle("Измерение переходного слоя")
-        self.signalToChangeImage.connect(self.changeImage)
-        self.signalStepOfAnalysis.connect(self.putResultsOnTextField)
-        self.signalResult.connect(self.processingResult)
-        self.currentResults = None
-        self.program = InterfaceProgram(self.signalToChangeImage, self.signalStepOfAnalysis, self.signalResult)
-
-    def changeImage(self, image):
-        qPixmap = QPixmap.fromImage(image).scaledToHeight(self.image.height())
-        self.image.setPixmap(qPixmap)
-
-    def putResultsOnTextField(self, message):
-        self.textField.setText(message)
-
-    def processingResult(self, results):
-        self.currentResults = results
-        self.showResultTable()
-        self.calculateTotalValue([True] * len(self.currentResults))
-        self.clear.setEnabled(True)
-
-    def checkBoxChanged(self):
-        flags = [True] * len(self.currentResults)
-        for i in range(self.table.rowCount()):
-            flags[i] = self.table.cellWidget(i, 0).isChecked()
-        self.calculateTotalValue(flags)
-
-    def calculateTotalValue(self, flags):
-        if any(flags):
-            valuesForTotalValue = []
-            for i, values in enumerate(self.currentResults):
-                if flags[i]:
-                    valuesForTotalValue.append(values)
-            median = np.median(list(itertools.chain(*valuesForTotalValue)))
-            if self.program.scaleCoef:
-                median *= self.program.scaleCoef
-            strValue = f"{median:.4g}"
-            strValue += ' ' + self.program.unit
-            self.resultField.setText(strValue)
-        else:
-            self.resultField.setText(str('Не выбрано ни одного объекта'))
-
-    def showResultTable(self):
-        self.table.setRowCount(len(self.currentResults))
-        for row in range(self.table.rowCount()):
-            # item1 = QtWidgets.QTableWidgetItem()
-            # item1.setFlags(QtCore.Qt.ItemFlag.ItemIsUserCheckable | QtCore.Qt.ItemFlag.ItemIsEnabled)
-            # item1.setCheckState(QtCore.Qt.CheckState.Checked)
-            # self.table.setItem(row, 0, item1)
-            checkBox = QtWidgets.QCheckBox(parent=self.table)
-            checkBox.setChecked(True)
-            checkBox.clicked.connect(self.checkBoxChanged)
-            self.table.setCellWidget(row, 0, checkBox)
-            if self.program.scaleCoef:
-                valueCell = f"{np.median(self.currentResults[row]) * self.program.scaleCoef:.4g} {self.program.unit}"
-            else:
-                valueCell = f"{np.median(self.currentResults[row]):.4g} {self.program.unit}"
-            cell = QtWidgets.QTableWidgetItem(valueCell)
-            self.table.setItem(row, 1, cell)
-        self.table.resizeColumnsToContents()
 
     def initUI(self):
-        self.UiComponents()
-
-    def UiComponents(self):
-        self.settingsButton = QPushButton("Настройки", self)
-        self.settingsButton.setGeometry(QtCore.QRect(5, 5, 150, 30))
-        self.settingsButton.setObjectName('changePage')
-        self.settingsButton.clicked.connect(self.make_handleButton("settingsButton"))
+        """
+        Инициализация графических элементов окна
+        """
+        # self.settingsButton = QPushButton("Настройки", self)
+        # self.settingsButton.setGeometry(QtCore.QRect(5, 5, 150, 30))
+        # self.settingsButton.setObjectName('changePage')
+        # self.settingsButton.clicked.connect(self.make_handleButton("settingsButton"))
 
         self.image = QLabel(self)
         self.image.setObjectName('image')
@@ -150,12 +132,12 @@ class MainWindow(PageWindow):
         self.textFieldLabel.setObjectName('label')
         self.textFieldLabel.setGeometry(24, 552, 768, 18)
 
-        self.textField = QTextEdit(self)
-        self.textField.setGeometry(24, 570, 768, 60)
-        self.textField.setObjectName('textField')
-        self.textField.setReadOnly(True)
-        self.textField.setText(
-            'Привет, мир!\nПривет, Никита!\nПривет, мир!\nПривет, Никита!\nПривет, мир!\nПривет, Никита!')
+        self.fieldCurrentStatus = QTextEdit(self)
+        self.fieldCurrentStatus.setGeometry(24, 570, 768, 60)
+        self.fieldCurrentStatus.setObjectName('textField')
+        self.fieldCurrentStatus.setReadOnly(True)
+        self.fieldCurrentStatus.setText(
+            'Выберите изображение для анализа. Для этого нажмите кнопку "Загрузить изображение". После выбора снимка сплава нажмите на кнопку "Начать анализ".')
 
         self.startButton = QPushButton('Начать анализ', self)
         self.startButton.setGeometry(231, 640, 167, 35)
@@ -169,12 +151,11 @@ class MainWindow(PageWindow):
         self.clear.setEnabled(False)
         self.clear.clicked.connect(self.clearClick)
 
-        # self.layoutTable = QtWidgets.QVBoxLayout()
-        # self.setLayout(self.layoutTable)
-        # self.layoutTable.setGeometry(QtCore.QRect(24, 50, 768, 500))
-        self.table = QtWidgets.QTableWidget(self)
-        self.table.setColumnCount(2)  # Set three columns
-        self.table.setRowCount(3)
+        # self.table = QtWidgets.QTableWidget(self)
+        # self.table.setColumnCount(2)  # Set three columns
+        # self.table.setRowCount(3)
+        # self.table.setGeometry(QtCore.QRect(813, 50, 203, 500))
+        self.table = self.TableOfResults(self, self.checkBoxChanged)
         self.table.setGeometry(QtCore.QRect(813, 50, 203, 500))
 
         self.resultLabel = QLabel("Общее значение", self)
@@ -187,7 +168,59 @@ class MainWindow(PageWindow):
         self.resultField.setReadOnly(True)
         self.resultField.setText('')
 
+    def initLogic(self):
+        """
+        Инициализация программы оценки ширины переходного слоя
+        :return:
+        """
+        self.signalToChangeImage.connect(self.changeImage)
+        self.signalStepOfAnalysis.connect(self.putResultsOnTextField)
+        self.signalResult.connect(self.processingResult)
+
+        self.program = InterfaceProgram()
+        self.program.setSignals(self.signalToChangeImage, self.signalStepOfAnalysis, self.signalResult)
+
+    def changeImage(self, image):
+        """
+        Изменение изображения в окне
+        :param image:
+        :return:
+        """
+        qPixmap = QPixmap.fromImage(image).scaledToHeight(self.image.height())
+        self.image.setPixmap(qPixmap)
+
+    def putResultsOnTextField(self, message):
+        """
+        Вывод сообщения в текстовое поле
+        """
+        self.fieldCurrentStatus.setText(message)
+
+    def processingResult(self, flagOfEnd):
+        """
+        Обработка результатов анализа
+        """
+        if flagOfEnd:
+            self.table.showResult(self.program.currentResult)
+            self.resultField.setText(self.program.currentResult.getTotalWidth([True] * len(self.program.currentResult.result)))
+            self.fieldCurrentStatus.setText('Анализ завершён')
+            self.clear.setEnabled(True)
+        else:
+            raise self.fieldCurrentStatus.setText('Произошла неизвестная ошибка')
+
+    def checkBoxChanged(self):
+        """
+        Функция, выполняющаяся при изменении check-box в таблице
+        :return:
+        """
+        flags = [True] * len(self.program.currentResult.result)
+        for i in range(self.table.rowCount()):
+            flags[i] = self.table.cellWidget(i, 0).isChecked()
+        self.resultField.setText(self.program.currentResult.getTotalWidth(flags))
+
     def inputImage(self):
+        """
+        Ввод изображения
+        """
         fileName = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Image", "./", "*.tif")[0]
         if len(fileName):
             if self.program.inputImage(fileName[0]):
@@ -201,12 +234,15 @@ class MainWindow(PageWindow):
         self.buttonInput.show()
         self.startButton.setEnabled(False)
         self.clear.setEnabled(False)
-        self.textField.clear()
-        self.currentResults = None
+        self.fieldCurrentStatus.clear()
         self.table.clear()
         self.resultField.clear()
 
     def startAnalysis(self):
+        """
+        Функция, выполняющая при нажатии кнопки "Начать анализ"
+        :return:
+        """
         self.program.estimate()
         self.startButton.setEnabled(False)
         self.clear.setEnabled(False)
@@ -269,8 +305,7 @@ class Window(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    import sys
-
+    multiprocessing.freeze_support()
     app = QtWidgets.QApplication(sys.argv)
     app.setStyleSheet(styleSheets)
     w = Window()
