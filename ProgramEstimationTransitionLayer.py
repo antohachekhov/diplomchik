@@ -1,24 +1,49 @@
-from sklearn.cluster import KMeans
+"""
+Модуль оценки ширины переходного слоя на снимках сплава двух смесей металлов
+"""
+
 import time
-import numpy as np
-from WindowProcessing import WindowProcessing
-import FractalAnalysisInImage
-from CountComponents import CountComponents
-from scipy.signal import medfilt
-from sklearn.neighbors import NearestNeighbors
-from KneeLocatorModule import KneeLocator
-from sklearn.cluster import DBSCAN
-import cv2 as cv
-import matplotlib.pyplot as plt
-from statsmodels.nonparametric.api import lowess
-from sklearn.mixture import GaussianMixture
-from MeasurementOnBinaryImage import MeasureObjects
-from Image import Image
-from multiprocessing.shared_memory import SharedMemory
 import threading
+import cv2 as cv
+import numpy as np
+import FractalAnalysisInImage
+import matplotlib.pyplot as plt
+
+from Image import Image
+from scipy.signal import medfilt
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
+from KneeLocatorModule import KneeLocator
+from sklearn.mixture import GaussianMixture
+from CountComponents import CountComponents
+from WindowProcessing import WindowProcessing
+from sklearn.neighbors import NearestNeighbors
+from statsmodels.nonparametric.api import lowess
+from MeasurementOnBinaryImage import MeasureObjects
+from multiprocessing.shared_memory import SharedMemory
 
 
 class EstimationTransitionLayer:
+    """
+    Класс алгоритма оценки ширины переходного слоя
+
+    Атрибуты
+    ----------
+    _analyzedImg : ndarray, по умолчанию = None
+        Анализируемое изображение
+
+    _sharedMemory : SharedMemory, по умолчанию = None
+        Указатель на общую память.
+
+    _sharedMemoryBuffer : ndarray, по умолчанию = None
+        Массив, хранящийся в общей памяти
+
+    _show_step : bool, по умолчанию = False
+        True, если необходимо отображать промежуточные результаты алгоритмов на экран.
+
+    _settings : dict, по умолчанию = DefaultSettings
+        Словарь настроек (параметров) алгоритмов.
+    """
     DefaultSettings = {
         'DBSCAN': {
             'minSamplesInCluster': 8,
@@ -27,22 +52,29 @@ class EstimationTransitionLayer:
         'WindowProcessing': {
             'fractalDimensionEstimationMethod': 'Prism',
             'parallelComputing': True,
-            'windowSize': 32,
+            'windowSize': 30,
             'X-axisStep': 1,
             'Y-axisStep': 1,
-            'numberWindowDivides': 2
+            'numberWindowDivides': 2,
+            'nComp': None
         },
         'AnalysisOfFieldWithTwoComponents': {
             'minChangeFractalDimensionOfTwoTextures': 0.4,
             'widthOfMedianKernel': 21,
             'columnarAnalysis': True,
-            'LOWESS-frac': 0.1
+            'LOWESS-frac': 0.1,
+            'CoefWindow': 1
         },
         'AnalysisOfFieldWithThreeComponents': {
             'classification': 'k-means'
         },
         'Measure': {
             'CentralTendency': 'median'
+        },
+        'Multithreading': {
+            'SignalForLoggingOfCurrentStep': None,
+            'NameOfSharedMemory': None,
+            'Mutex': None
         }
     }
 
@@ -91,28 +123,53 @@ class EstimationTransitionLayer:
     }
 
     def __init__(self, showStep: bool = False):
+        """
+        Конструктор класса
+        :param showStep : bool, по умолчанию = False.
+            Флаг об отображении промежуточных результатов на экране.
+        """
         self._analyzedImg = None
         self._showStep = showStep
         self._settings = EstimationTransitionLayer.DefaultSettings
-        self._mutex = None
         self._sharedMemory = None
         self._sharedMemoryBuffer = None
-        self._signalForCurrentStep = None
 
-    def clear(self):
+    def clear(self, clearSettings=True):
+        """
+        Очистка данных
+        :param clearSettings: bool, по умолчанию = True
+            Флаг о необходимости приведения настроек к виду по умолчанию
+        :return: None
+        """
         self._analyzedImg = None
-        self._settings = EstimationTransitionLayer.DefaultSettings
+        if clearSettings:
+            self._settings = EstimationTransitionLayer.DefaultSettings
         self._sharedMemory = None
-        if self._mutex is not None:
-            self._mutex.release()
+        if self._settings['Multithreading']['Mutex'] is not None:
+            self._settings['Multithreading']['Mutex'].release()
             print(f'{threading.current_thread().name} освободил ресурс')
 
     def setSettings(self, **kwargs):
+        """
+        Установка настроек
+        :param kwargs: dict
+            Входные настройки
+        :return: None
+        """
         for key in kwargs:
             inter = set(kwargs[key]).intersection(self._settings[key])
             self._settings[key].update((keyIntersec, kwargs[key][keyIntersec]) for keyIntersec in inter)
 
-    def _checkField(self, image, field: np.ndarray) -> bool:
+    def _checkField(self, image:np.ndarray, field: np.ndarray) -> bool:
+        """
+        Проверка входного ПФР на соответствие размеров изображения и измерительного окна
+        :param image: ndarray
+            Изображение
+        :param field: ndarray
+            ПФР
+        :return: bool
+            True - если проверка прошла успешно, иначе - False
+        """
         # размер поля должен соответсвовать размеру изображения
         if field.shape != (int((image.shape[0] - self._settings['WindowProcessing']['windowSize']) /
                                self._settings['WindowProcessing']['Y-axisStep'] + 1),
@@ -123,40 +180,86 @@ class EstimationTransitionLayer:
         return True
 
     def setImage(self, image: np.ndarray, field: np.ndarray = None, mask: np.ndarray = None):
+        """
+        Ввод изображения
+        :param image: ndarray
+            Входное изображение
+        :param field: ndarray, по умолчанию = None
+            ПФР
+        :param mask: ndarray, по умолчанию = None
+            Маска изображения
+        :return: None
+        """
         if field is not None:
             self._checkField(image, field)
         self._analyzedImg = Image(image, field, mask)
 
     def getField(self):
+        """
+        Вывод ПФР
+        :return: ndarray
+            ПФР
+        """
         return self._analyzedImg.field
 
     def setField(self, field: np.ndarray):
+        """
+        Ввод ПФР
+        :param field: ndarray
+            Входное ПФР
+        :return: None
+        """
         if self._analyzedImg is None:
             raise AttributeError("It is not possible to set field in the absence of image")
         self._checkField(field)
         self._analyzedImg.field = field
 
     def getMask(self):
+        """
+        Получить маску
+        :return: ndarray
+            Маска для введенного изображения
+        """
         return self._analyzedImg.mask
 
     def setMask(self, mask: np.ndarray):
+        """
+        Ввод маски
+        :param mask: ndarray
+            Маска для введённого изображения
+        :return: None
+        """
         self._analyzedImg.mask = mask
 
-    def _logging(self, message):
-        if self._signalForCurrentStep is not None:
-            self._signalForCurrentStep.emit(message)
+    def _logging(self, message:str):
+        """
+        Вывод сообщений об исполнении алгоритмов
+        :param message: str
+            Сообщение
+        :return: None
+        """
+        if self._settings['Multithreading']['SignalForLoggingOfCurrentStep'] is not None:
+            # вывод сообщения через сигнал в основной поток
+            self._settings['Multithreading']['SignalForLoggingOfCurrentStep'].emit(message)
         else:
+            # вывод сообщения на экран
             print(message)
 
     def _calculateField(self):
+        """
+        Вычисление ПФР
+        :return: None
+        """
+        # Инициализация оконной обработки
         winProcess = WindowProcessing(**self._settings['WindowProcessing'])
+        # Определение размеров субокон
         subWindowsSizes = np.array(
             [int((self._settings['WindowProcessing']['windowSize'] + (2 ** degree - 1)) / 2 ** degree)
              for degree in range(self._settings['WindowProcessing']['numberWindowDivides'] + 1)])
 
         self._logging(
             f"Шаг 1/8: Вычисление ПФР ({'параллельно' if self._settings['WindowProcessing']['parallelComputing'] else 'последовательно'})")
-
+        # Вычисление ПФР с помощью оконной обработки с заданной оконной функцией
         self._analyzedImg.field = winProcess.processing(self._analyzedImg.img,
                                                         EstimationTransitionLayer.WindowFunctions[
                                                             self._settings['WindowProcessing'][
@@ -233,6 +336,12 @@ class EstimationTransitionLayer:
 
         :return extr : 1-D numpy массив.
             Массив координат локальных экстремумов
+
+        :return A : list
+            Множество точек A
+
+        :return B : list
+            Множество точек B
         """
         extr = np.empty(0, dtype=np.uint32)
         ampl = np.empty(0, dtype=np.float64)
@@ -282,9 +391,11 @@ class EstimationTransitionLayer:
                 # если значения увеличиваются, впереди локальный максимум
                 toMax = True
 
+            # Разность между соседними экстремумами
             curDiff = abs(data[i] - data[extr[-1]])
-
+            # Проверки превышения разности на заданный порог
             if curDiff >= self._settings['AnalysisOfFieldWithTwoComponents']['minChangeFractalDimensionOfTwoTextures']:
+                # если впереди локальный максимум
                 if not toMax:
                     if len(extr) >= 2:
                         B = np.append(B, [extr[-2]])
@@ -294,24 +405,33 @@ class EstimationTransitionLayer:
                     findMax = True
 
             # разность между локальными экстремумами заносится в массив величин изменений
-            ampl = np.append(ampl, [abs(data[i] - data[extr[-1]])])
+            ampl = np.append(ampl, [curDiff])
             # координата найденного локального экстремума заносится в массив координат
             extr = np.append(extr, [i])
 
         if findMax:
+            # если для последнего локального минимума не был найден локальный максимум
             A = A[:-1]
 
         return ampl, extr, A, B
 
-    def _putInSharedMemory(self, data, description: str = None):
+    def _putInSharedMemory(self, data:np.ndarray, description: str = None):
+        """
+        Вывод данных в общую память
+        :param data: ndarray
+            Данные
+        :param description: str
+            Описание данных
+        :return: None
+        """
         self._sharedMemoryBuffer[:] = data
         print(f'{threading.current_thread().name} положил в ОП{' ' + description if description else ''}')
-        self._mutex.release()
-        print(f'{threading.current_thread().name} освободил ресурс')
+        self._settings['Multithreading']['Mutex'].release()
+        print(f'{threading.current_thread().name} освободил мутекс')
         time.sleep(1)
-        print(f'{threading.current_thread().name} ожидает доступ к ресурсу')
-        self._mutex.acquire()
-        print(f'{threading.current_thread().name} получил доступ к ресурсу')
+        print(f'{threading.current_thread().name} ожидает доступ к мутексу')
+        self._settings['Multithreading']['Mutex'].acquire()
+        print(f'{threading.current_thread().name} получил доступ к мутексу')
 
     def _analysisFieldWithTwoComponents(self):
         """
@@ -350,6 +470,7 @@ class EstimationTransitionLayer:
             #                 changeBegin = np.vstack([changeBegin, np.array([n, extrMF[j]])])
             #                 changeEnd = np.vstack([changeEnd, np.array([n, extrMF[j + 1]])])
 
+            # Определение множеств A и B
             _, _, A, B = self._findExtrWithDiff(filterSlice)
             for a, b in zip(A, B):
                 changeBegin = np.vstack([changeBegin, np.array([n, a])])
@@ -359,9 +480,8 @@ class EstimationTransitionLayer:
         changeEnd = np.delete(changeEnd, 0, axis=0)
 
         # перевод точек поля в размерность изображения
-
         radius = int(self._settings['WindowProcessing'][
-                    'windowSize'] + (2 ** self._settings['WindowProcessing']['numberWindowDivides'] - 1)) / 2 ** self._settings['WindowProcessing']['numberWindowDivides']
+                    'windowSize'] + (2 ** self._settings['WindowProcessing']['numberWindowDivides'] - 1)) / 2 ** self._settings['WindowProcessing']['numberWindowDivides'] / self._settings['AnalysisOfFieldWithTwoComponents']['CoefWindow']
         for point1, point2 in zip(changeBegin, changeEnd):
             point1[0] = int(point1[0] * self._settings['WindowProcessing']['X-axisStep'] + self._settings['WindowProcessing'][
                     'windowSize'] / 2)
@@ -402,7 +522,7 @@ class EstimationTransitionLayer:
             plt.show()
 
         # Кладём в общую память изображение с распределением точек
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
             for b, e in zip(changeBegin, changeEnd):
                 tempImg = cv.circle(tempImg, (b[0], b[1]), radius=3, color=(0, 0, 255), thickness=-1)
@@ -428,7 +548,7 @@ class EstimationTransitionLayer:
         dbscanCluster.fit(changeBegin)
 
         # Кладём в общую память изображение с результатами кластеризации
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
             for i, z in enumerate(zip(changeBegin, changeEnd)):
                 b, e = z
@@ -470,7 +590,7 @@ class EstimationTransitionLayer:
         clusteredChangeEnd = np.delete(clusteredChangeEnd, 0, axis=0)
 
         # Кладём в общую память изображение с результатами кластеризации после фильтрации
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempImg = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2BGR)
             for i, z in enumerate(zip(clusteredChangeBegin, clusteredChangeEnd)):
                 b, e = z
@@ -532,7 +652,7 @@ class EstimationTransitionLayer:
             # строится регрессионная модель для точек, соответствующих концу переходного изменения поля
             z2 = lowess(y2, x, frac=self._settings['AnalysisOfFieldWithTwoComponents']['LOWESS-frac'])
 
-            if self._mutex is not None:
+            if self._settings['Multithreading']['Mutex']is not None:
                 cv.polylines(tempImg, [z1.astype(np.int32).reshape((-1, 1, 2))], False, (255, 0, 0), 2)
                 cv.polylines(tempImg, [z2.astype(np.int32).reshape((-1, 1, 2))], False, (255, 0, 0), 2)
 
@@ -548,7 +668,7 @@ class EstimationTransitionLayer:
             cv.fillPoly(self._analyzedImg.mask, [pts], 255)
 
         # Кладём в общую память изображение с кривыми
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             self._putInSharedMemory(cv.cvtColor(tempImg, cv.COLOR_BGR2RGB), 'кривые')
 
     def _segmentForDistribution(self, img, intensity):
@@ -570,7 +690,7 @@ class EstimationTransitionLayer:
         maskByIntensity = cv.inRange(img, intensity, intensity + 1)
 
         # Кладём в общую память изображение с пороговой бинаризацией
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
@@ -583,7 +703,7 @@ class EstimationTransitionLayer:
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (7, 7))
         maskAfterOpen = cv.morphologyEx(maskByIntensity, cv.MORPH_OPEN, kernel)
 
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
@@ -595,7 +715,7 @@ class EstimationTransitionLayer:
         kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
         maskAfterClose = cv.morphologyEx(maskAfterOpen, cv.MORPH_CLOSE, kernel)
 
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
@@ -621,7 +741,7 @@ class EstimationTransitionLayer:
             if stats[i, -1] > meanS:
                 maskAfterFilter[output == i] = 255
 
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
@@ -644,7 +764,7 @@ class EstimationTransitionLayer:
                       self._settings['WindowProcessing']['windowSize'] - 1)
         maskAfterBlur = cv.GaussianBlur(maskAfterFilter, (radius, radius), 0)
 
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
@@ -696,10 +816,6 @@ class EstimationTransitionLayer:
     def _analysisFieldWithThreeComponents(self):
         """
         Сегментация переходного слоя через EM-классификацию
-
-        :param n_comp: int
-            Количество компонент в смеси распределений
-
         """
         self._logging('Шаг 3/8 (алгоритм 2): Кластеризация по алгоритму k-средних')
         # классификация значений поля по EM-алгоритму с тремя компонентами в смеси
@@ -718,7 +834,7 @@ class EstimationTransitionLayer:
         fieldPredImg = fieldPredImg.astype(np.uint8)
 
         # Кладём в общую память изображение с результатами классификации
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             tempMask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
             tempMask[int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
                 self._settings['WindowProcessing']['windowSize'] / 2) + 1,
@@ -754,7 +870,14 @@ class EstimationTransitionLayer:
         int(self._settings['WindowProcessing']['windowSize'] / 2): -int(
             self._settings['WindowProcessing']['windowSize'] / 2) + 1] = maskStratum
 
-    def _maskOnImage(self, mask):
+    def _maskOnImage(self, mask:np.ndarray):
+        """
+        Наложение маски на исходное изображение
+        :param mask: ndarray
+            Маска - бинарное изображение
+        :return: result: ndarray
+            Исходное изображение в пространстве RGB с наложенной маской
+        """
         img = cv.cvtColor(self._analyzedImg.img, cv.COLOR_BGR2RGB)
         # создание слоя-заливки
         color_layer = np.zeros(img.shape, dtype=np.uint8)
@@ -777,6 +900,13 @@ class EstimationTransitionLayer:
         return result
 
     def _maskOnImageWithNumber(self, contours):
+        """
+        Наложение маски на исходное изображение с указанием номеров объектов
+        :param contours: ndarray
+            Контуры изображений
+        :return: result: ndarray
+            Исходное изображение в пространстве RGB с наложенной маской
+        """
         imgRGB = cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB)
         result = imgRGB
         for i, contour in enumerate(contours):
@@ -807,38 +937,48 @@ class EstimationTransitionLayer:
         return result
 
     def _segmentTransitionLayer(self):
+        """
+        Сегментация переходного слоя на изображении
+        :return: None
+        """
         if self._analyzedImg.mask is None:
             self._logging('Шаг 2/8: Определение количества компонент в смеси')
             self._analyzedImg.mask = np.zeros(self._analyzedImg.img.shape, dtype=np.uint8)
-            countComponentsObj = CountComponents(2, 3, self._showStep)
-            countComponents = countComponentsObj(self._analyzedImg.field.flatten())
+            if self._settings['WindowProcessing']['nComp'] is None:
+                countComponentsObj = CountComponents(2, 3, self._showStep)
+                countComponents = countComponentsObj(self._analyzedImg.field.flatten())
+            else:
+                countComponents = self._settings['WindowProcessing']['nComp']
             if countComponents == 2:
                 self._analysisFieldWithTwoComponents()
             else:
                 self._analysisFieldWithThreeComponents()
         return self._analyzedImg.mask
 
-    def estimateTransitionLayer(self, mutex=None, sharedMemoryName=None, signalForCurrentStep=None):
-        if signalForCurrentStep is not None:
-            self._signalForCurrentStep = signalForCurrentStep
-
+    def estimateTransitionLayer(self):
+        """
+        Оценка ширины переходного слоя
+        :return: distances: list
+            Значения ширины каждой сегментированной области в каждой точке их контура
+        """
         self._logging('Началась оценка ширины переходного слоя')
 
-        if mutex is not None and sharedMemoryName is not None:
-            self._mutex = mutex
-            print(f'{threading.current_thread().name} ожидает доступ к ресурсу для первого подключения')
-            self._mutex.acquire()
-            print(f'{threading.current_thread().name} получил доступ к ресурсу для первого подключения')
-            self._sharedMemory = SharedMemory(name=sharedMemoryName, create=False)
+        # Захват мутекса и общей памяти
+        if self._settings['Multithreading']['Mutex'] is not None and self._settings['Multithreading']['NameOfSharedMemory'] is not None:
+            print(f'{threading.current_thread().name} ожидает доступ к мутексу для первого подключения')
+            self._settings['Multithreading']['Mutex'].acquire()
+            print(f'{threading.current_thread().name} получил доступ к мутексу для первого подключения')
+            self._sharedMemory = SharedMemory(name=self._settings['Multithreading']['NameOfSharedMemory'], create=False)
             print(f'{threading.current_thread().name} Подключение к общей памяти прошло успешно')
             self._sharedMemoryBuffer = np.ndarray(cv.cvtColor(self._analyzedImg.img, cv.COLOR_GRAY2RGB).shape,
                                                   dtype=np.uint8, buffer=self._sharedMemory.buf)
 
         if self._analyzedImg is None:
             raise AttributeError("It is impossible to estimate width of transition layer in absence of image")
+        # Вычисление ПФР
         if self._analyzedImg.field is None and self._analyzedImg.mask is None:
             self._calculateField()
-
+        # Сегментация переходного слоя
         if self._analyzedImg.mask is None:
             self._segmentTransitionLayer()
 
@@ -847,18 +987,20 @@ class EstimationTransitionLayer:
             plt.show()
 
         self._logging('Шаг 8/8: Оценка ширины выделенных сегментов')
+        # Измерение ширины каждого сегментированного объекта
         measurer = MeasureObjects(self._showStep)
         distances, contours = measurer(self._analyzedImg.mask, self._settings['WindowProcessing']['windowSize'])
 
-        if self._mutex is not None:
+        if self._settings['Multithreading']['Mutex'] is not None:
             self._putInSharedMemory(self._maskOnImageWithNumber(contours), 'нумерация объектов')
-
-        if self._mutex is not None:
+        # Освобождение мутекса и очистка общей памяти
+        if self._settings['Multithreading']['Mutex'] is not None:
             self._sharedMemory.close()
             self._sharedMemory.unlink()
-            self._mutex.release()
-            self._mutex = None
-            print(f'{threading.current_thread().name} освободил ресурс')
+            print(f'{threading.current_thread().name} закрыл общую память')
+            self._settings['Multithreading']['Mutex'].release()
+            self._settings['Multithreading']['Mutex'] = None
+            print(f'{threading.current_thread().name} освободил мутекс')
 
         if self._showStep:
             plt.hist(distances)
