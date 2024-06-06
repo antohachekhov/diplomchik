@@ -54,7 +54,6 @@ class WindowProcessing:
             with multiprocessing.Pool(processes=os.cpu_count()) as pool:
                 result = [pool.map(windowFunc, rowWindows) for rowWindows in windows]
                 pool.close()
-                # pool.terminate()
                 pool.join()
             print('Тест с параллельными вычислениями занял %.6f' % (time.time() - timer))
         else:
