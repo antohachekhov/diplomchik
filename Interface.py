@@ -1,7 +1,6 @@
 import sys
 import numpy as np
 import multiprocessing
-
 from PyQt5.QtGui import QPixmap
 from mainProgram import InterfaceProgram
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -179,6 +178,7 @@ class MainWindow(PageWindow):
 
         self.program = InterfaceProgram()
         self.program.setSignals(self.signalToChangeImage, self.signalStepOfAnalysis, self.signalResult)
+        self.program.initProgram()
 
     def changeImage(self, image):
         """

@@ -6,20 +6,20 @@ import time
 import threading
 import cv2 as cv
 import numpy as np
-import FractalAnalysisInImage
+from SegmentationOfLayer import FractalAnalysisInImage
 import matplotlib.pyplot as plt
 
 from Image import Image
 from scipy.signal import medfilt
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import KMeans
-from KneeLocatorModule import KneeLocator
+from SegmentationOfLayer.KneeLocatorModule import KneeLocator
 from sklearn.mixture import GaussianMixture
-from CountComponents import CountComponents
-from WindowProcessing import WindowProcessing
+from SegmentationOfLayer.CountComponents import CountComponents
+from SegmentationOfLayer.WindowProcessing import WindowProcessing
 from sklearn.neighbors import NearestNeighbors
 from statsmodels.nonparametric.api import lowess
-from MeasurementOnBinaryImage import MeasureObjects
+from MeasurementObjects.MeasurementOnBinaryImage import MeasureObjects
 from multiprocessing.shared_memory import SharedMemory
 
 

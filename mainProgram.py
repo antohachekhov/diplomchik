@@ -156,11 +156,7 @@ class InterfaceProgram:
 
         self.GUIconnect = False
 
-        self.estimator = EstimationTransitionLayer(False)
-        self.estimator.setSettings(WindowProcessing={'parallelComputing': True},
-                                   Multithreading={'SignalForLoggingOfCurrentStep': self.signalsForGUI['signalForCurrentStep'],
-                                                   'NameOfSharedMemory': self.nameSharedMemory,
-                                                   'Mutex': self.mutex})
+        self.estimator = None
 
     def setSignals(self, signalForImage, signalForCurrentStep, signalForResult):
         """
@@ -177,6 +173,14 @@ class InterfaceProgram:
         self.signalsForGUI['signalForCurrentStep'] = signalForCurrentStep
         self.signalsForGUI['signalForResult'] = signalForResult
         self.GUIconnect = True
+
+    def initProgram(self):
+        self.estimator = EstimationTransitionLayer(False)
+        self.estimator.setSettings(WindowProcessing={'parallelComputing': True},
+                                   Multithreading={
+                                       'SignalForLoggingOfCurrentStep': self.signalsForGUI['signalForCurrentStep'],
+                                       'NameOfSharedMemory': self.nameSharedMemory,
+                                       'Mutex': self.mutex})
 
     def sendImage(self, image, format='gray'):
         """
@@ -329,6 +333,6 @@ fieldPath = None
 # imageName = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\1-11.tif"
 # fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\25\1-40\field_filt25_180_prism_w30x1y1.csv"
 # fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\5\1-11\field_filt_prism_w30x1y1.csv"
-fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_prism_w30x1y1.csv"
+# fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-04\field_prism_w30x1y1.csv"
 # fieldPath = r"C:\Users\bortn\Desktop\diplomchik\analysis\new dataset\20\1-34\field_filt_w30.csv"
 

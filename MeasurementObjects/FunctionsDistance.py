@@ -1,6 +1,6 @@
 import numpy as np
 from math import dist, fabs
-from Line import Line
+from MeasurementObjects.Line import Line
 
 
 
