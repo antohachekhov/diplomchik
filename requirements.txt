@@ -1,0 +1,7 @@
+PyQt5==5.15.10
+numpy==1.26.4
+opencv-python==4.9.0.80
+Pillow==10.3.0
+scikit-learn==1.5.0
+scipy==1.13.1
+statsmodels==0.14.2
