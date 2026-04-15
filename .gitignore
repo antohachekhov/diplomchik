@@ -5,6 +5,10 @@
 /scipy/
 /image/
 /testMeasure2/
+/EMAnalysis
+/fieldsForCompare
+/image/original image
+
 /tests.spec
 /modified_img.jpg
 /listDistances*.txt
@@ -22,3 +26,5 @@
 /analysis_algorithm_data.py
 /analys_data.py
 /1-11.tif
+/compareEMandKMean.py
+/CompareFractalsMethods.py
